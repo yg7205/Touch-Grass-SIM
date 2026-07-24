@@ -17,14 +17,25 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install dependencies and PyInstaller
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller -r requirements.txt || pip install pyinstaller
+          sudo apt-get update && sudo apt-get install -y imagemagick
 
       - name: Build executable with PyInstaller
         run: |
           pyinstaller --onefile --noconsole --name='touch-grass-sim' main.py
+
+      - name: Generate Grass Icon
+        run: |
+          mkdir -p pkg_amd64/usr/share/icons/hicolor/128x128/apps
+          convert -size 128x128 xc:transparent \
+            -fill "#4CAF50" -draw "ellipse 64,100 45,15 0,360" \
+            -fill "#2E7D32" -draw "path 'M 40,95 Q 30,50 20,20 Q 45,45 50,95 Z'" \
+            -fill "#4CAF50" -draw "path 'M 64,95 Q 64,35 64,10 Q 75,40 76,95 Z'" \
+            -fill "#81C784" -draw "path 'M 88,95 Q 98,50 108,20 Q 83,45 78,95 Z'" \
+            pkg_amd64/usr/share/icons/hicolor/128x128/apps/touch-grass-sim.png
 
       - name: Build AMD64 Debian Package
         run: |
@@ -49,7 +60,7 @@ jobs:
           Name=Touch Grass SIM
           Comment=Anti-doomscroll break timer and mindfulness tracker
           Exec=/usr/bin/touch-grass-sim
-          Icon=preferences-system-time
+          Icon=touch-grass-sim
           Terminal=false
           Categories=Utility;
           EOF
@@ -99,27 +110,35 @@ jobs:
           path: touch-grass-sim_1.0.0_amd64.deb
 
   build-linux-arm64:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Set up QEMU for ARM64 Emulation
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install dependencies and PyInstaller
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller -r requirements.txt || pip install pyinstaller
+          sudo apt-get update && sudo apt-get install -y imagemagick
 
       - name: Build executable with PyInstaller
         run: |
           pyinstaller --onefile --noconsole --name='touch-grass-sim' main.py
+
+      - name: Generate Grass Icon
+        run: |
+          mkdir -p pkg_arm64/usr/share/icons/hicolor/128x128/apps
+          convert -size 128x128 xc:transparent \
+            -fill "#4CAF50" -draw "ellipse 64,100 45,15 0,360" \
+            -fill "#2E7D32" -draw "path 'M 40,95 Q 30,50 20,20 Q 45,45 50,95 Z'" \
+            -fill "#4CAF50" -draw "path 'M 64,95 Q 64,35 64,10 Q 75,40 76,95 Z'" \
+            -fill "#81C784" -draw "path 'M 88,95 Q 98,50 108,20 Q 83,45 78,95 Z'" \
+            pkg_arm64/usr/share/icons/hicolor/128x128/apps/touch-grass-sim.png
 
       - name: Build ARM64 Debian Package
         run: |
@@ -144,7 +163,7 @@ jobs:
           Name=Touch Grass SIM
           Comment=Anti-doomscroll break timer and mindfulness tracker
           Exec=/usr/bin/touch-grass-sim
-          Icon=preferences-system-time
+          Icon=touch-grass-sim
           Terminal=false
           Categories=Utility;
           EOF
