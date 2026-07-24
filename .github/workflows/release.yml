@@ -1,50 +1,46 @@
-name: Build Cross-Platform Release Binaries
+name: Build Cross-Platform Release Packages
 
 on:
   push:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   build-linux-amd64:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install Dependencies
+
+      - name: Install Build Dependencies
         run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential zenity xxd
           python -m pip install --upgrade pip
           pip install pyinstaller pynput plyer
-      - name: Package TouchGrassSetup-amd64.run
+
+      - name: Build x86_64 .deb Package
         run: |
           pyinstaller --onefile --noconsole --name='touch-grass-sim' main.py
-          mkdir -p payload
-          cp dist/touch-grass-sim payload/
-          
-          # Systemd timer & desktop entry setup
-          cat << 'EOF' > payload/touch-grass-sim.service
-          [Unit]
-          Description=Touch Grass SIM Break Overlay
-          [Service]
-          Type=simple
-          ExecStart=/usr/bin/touch-grass-sim --timer-trigger
-          Environment=DISPLAY=:0
+          mkdir -p pkg_amd64/DEBIAN pkg_amd64/usr/bin pkg_amd64/usr/share/applications
+          cp dist/touch-grass-sim pkg_amd64/usr/bin/
+
+          cat << 'EOF' > pkg_amd64/DEBIAN/control
+          Package: touch-grass-sim
+          Version: 1.0.0
+          Architecture: amd64
+          Maintainer: yg7205
+          Depends: zenity, xxd
+          Description: Anti-doomscroll break timer with automated setup wizard.
           EOF
 
-          cat << 'EOF' > payload/touch-grass-sim.timer
-          [Unit]
-          Description=Trigger Touch Grass SIM Every 4 Hours
-          [Timer]
-          OnActiveSec=4h
-          OnUnitActiveSec=4h
-          Persistent=true
-          [Install]
-          WantedBy=timers.target
-          EOF
-
-          cat << 'EOF' > payload/touch-grass-sim.desktop
+          cat << 'EOF' > pkg_amd64/usr/share/applications/touch-grass-sim.desktop
           [Desktop Entry]
           Name=Touch Grass SIM
           Exec=touch-grass-sim
@@ -53,55 +49,123 @@ jobs:
           Categories=Utility;
           EOF
 
-          # Installer UI script
-          cat << 'EOF' > payload/install.sh
+          cat << 'EOF' > pkg_amd64/DEBIAN/postinst
           #!/bin/bash
           set -e
-          if zenity --question --title="Touch Grass SIM Setup Wizard" --text="Welcome to Touch Grass SIM!\n\nWould you like Touch Grass SIM to track doomscrolling activity data to automatically schedule breaks?" --width=400; then
+          DESKTOP_USER=$(who | grep -E '\(:[0-9]\)' | awk '{print $1}' | head -n 1)
+          [ -z "$DESKTOP_USER" ] && DESKTOP_USER="${SUDO_USER:-$(logname 2>/dev/null || echo '')}"
+          USER_ID=$(id -u "$DESKTOP_USER" 2>/dev/null || echo "1000")
+          export DISPLAY=:0
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$USER_ID/bus"
+
+          if su "$DESKTOP_USER" -c "zenity --question --title='Touch Grass SIM Setup Wizard' --text='Welcome to Touch Grass SIM!\n\nWould you like to enable activity tracking to help schedule breaks?' --width=400" 2>/dev/null; then
               TRACKING=true
           else
               TRACKING=false
           fi
-          pkexec bash -c "
-            cp touch-grass-sim /usr/bin/touch-grass-sim
-            chmod +x /usr/bin/touch-grass-sim
-            cp touch-grass-sim.desktop /usr/share/applications/
-            echo 'KERNEL==\"event*\", NAME=\"input/%k\", MODE=\"0644\", TAG+=\"uaccess\"' > /etc/udev/rules.d/99-touch-grass-sim.rules
-            udevadm control --reload-rules || true
-            udevadm trigger || true
-            mkdir -p /etc/touch-grass-sim
-            AUTH_KEY=\$(head -c 16 /dev/urandom | xxd -p)
-            echo \"{\\\"tracking_enabled\\\": \$TRACKING, \\\"auth_key\\\": \\\"\$AUTH_KEY\\\"}\" > /etc/touch-grass-sim/config.json
-            echo \"\$AUTH_KEY\" > /tmp/tg_auth_key
-          "
-          mkdir -p ~/.config/systemd/user
-          cp touch-grass-sim.service ~/.config/systemd/user/
-          cp touch-grass-sim.timer ~/.config/systemd/user/
-          systemctl --user daemon-reload
-          systemctl --user enable --now touch-grass-sim.timer
-          AUTH_KEY=$(cat /tmp/tg_auth_key 2>/dev/null || echo "GENERATED_KEY")
-          zenity --info --title="Touch Grass SIM Setup Complete!" --text="Touch Grass SIM is installed!\n\nInstallation Key: $AUTH_KEY\n\nPermissions registered. Hotkey & 4-hour auto-timer active." --width=450
-          EOF
-          chmod +x payload/install.sh
 
-          # Bundle into self-extracting .run file
-          cat << 'EOF' > TouchGrassSetup-amd64.run
-          #!/bin/bash
-          TMPDIR=$(mktemp -d /tmp/tg_installer.XXXXXX)
-          ARCHIVE=$(awk '/^__PAYLOAD_BELOW__/ {print NR+1; exit 0; }' "$0")
-          tail -n +$ARCHIVE "$0" | tar -xz -C "$TMPDIR"
-          cd "$TMPDIR"
-          ./install.sh
-          rm -rf "$TMPDIR"
+          echo 'KERNEL=="event*", NAME="input/%k", MODE="0644", TAG+="uaccess"' > /etc/udev/rules.d/99-touch-grass-sim.rules
+          udevadm control --reload-rules || true
+          udevadm trigger || true
+
+          [ -n "$DESKTOP_USER" ] && [ "$DESKTOP_USER" != "root" ] && usermod -aG input "$DESKTOP_USER" || true
+
+          mkdir -p /etc/touch-grass-sim
+          AUTH_KEY=$(head -c 16 /dev/urandom | xxd -p 2>/dev/null || echo "TG-$(date +%s)")
+          echo "{\"tracking_enabled\": $TRACKING, \"auth_key\": \"$AUTH_KEY\"}" > /etc/touch-grass-sim/config.json
+
+          su "$DESKTOP_USER" -c "zenity --info --title='Touch Grass SIM Installed!' --text='Setup complete!\n\nHotkey (Ctrl+Alt+G) and permissions registered successfully.' --width=400" 2>/dev/null || true
+
           exit 0
-          __PAYLOAD_BELOW__
           EOF
-          tar -czf - -C payload . >> TouchGrassSetup-amd64.run
-          chmod +x TouchGrassSetup-amd64.run
-      - name: Upload amd64 Installer to Release
-        uses: softprops/action-gh-release@v1
+
+          chmod 755 pkg_amd64/DEBIAN/postinst
+          dpkg-deb --build pkg_amd64 touch-grass-sim_1.0.0_amd64.deb
+
+      - name: Upload amd64 .deb Release
+        uses: softprops/action-gh-release@v2
         with:
-          files: TouchGrassSetup-amd64.run
+          files: touch-grass-sim_1.0.0_amd64.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-linux-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential zenity xxd
+          python -m pip install --upgrade pip
+          pip install pyinstaller pynput plyer
+
+      - name: Build ARM64 .deb Package
+        run: |
+          pyinstaller --onefile --noconsole --name='touch-grass-sim' main.py
+          mkdir -p pkg_arm64/DEBIAN pkg_arm64/usr/bin pkg_arm64/usr/share/applications
+          cp dist/touch-grass-sim pkg_arm64/usr/bin/
+
+          cat << 'EOF' > pkg_arm64/DEBIAN/control
+          Package: touch-grass-sim
+          Version: 1.0.0
+          Architecture: arm64
+          Maintainer: yg7205
+          Depends: zenity, xxd
+          Description: Anti-doomscroll break timer with automated setup wizard.
+          EOF
+
+          cat << 'EOF' > pkg_arm64/usr/share/applications/touch-grass-sim.desktop
+          [Desktop Entry]
+          Name=Touch Grass SIM
+          Exec=touch-grass-sim
+          Terminal=false
+          Type=Application
+          Categories=Utility;
+          EOF
+
+          cat << 'EOF' > pkg_arm64/DEBIAN/postinst
+          #!/bin/bash
+          set -e
+          DESKTOP_USER=$(who | grep -E '\(:[0-9]\)' | awk '{print $1}' | head -n 1)
+          [ -z "$DESKTOP_USER" ] && DESKTOP_USER="${SUDO_USER:-$(logname 2>/dev/null || echo '')}"
+          USER_ID=$(id -u "$DESKTOP_USER" 2>/dev/null || echo "1000")
+          export DISPLAY=:0
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$USER_ID/bus"
+
+          if su "$DESKTOP_USER" -c "zenity --question --title='Touch Grass SIM Setup Wizard' --text='Welcome to Touch Grass SIM!\n\nWould you like to enable activity tracking to help schedule breaks?' --width=400" 2>/dev/null; then
+              TRACKING=true
+          else
+              TRACKING=false
+          fi
+
+          echo 'KERNEL=="event*", NAME="input/%k", MODE="0644", TAG+="uaccess"' > /etc/udev/rules.d/99-touch-grass-sim.rules
+          udevadm control --reload-rules || true
+          udevadm trigger || true
+
+          [ -n "$DESKTOP_USER" ] && [ "$DESKTOP_USER" != "root" ] && usermod -aG input "$DESKTOP_USER" || true
+
+          mkdir -p /etc/touch-grass-sim
+          AUTH_KEY=$(head -c 16 /dev/urandom | xxd -p 2>/dev/null || echo "TG-$(date +%s)")
+          echo "{\"tracking_enabled\": $TRACKING, \"auth_key\": \"$AUTH_KEY\"}" > /etc/touch-grass-sim/config.json
+
+          su "$DESKTOP_USER" -c "zenity --info --title='Touch Grass SIM Installed!' --text='Setup complete!\n\nHotkey (Ctrl+Alt+G) and permissions registered successfully.' --width=400" 2>/dev/null || true
+
+          exit 0
+          EOF
+
+          chmod 755 pkg_arm64/DEBIAN/postinst
+          dpkg-deb --build pkg_arm64 touch-grass-sim_1.0.0_arm64.deb
+
+      - name: Upload arm64 .deb Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: touch-grass-sim_1.0.0_arm64.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -119,8 +183,8 @@ jobs:
       - name: Build Windows Executable
         run: |
           pyinstaller --onefile --noconsole --name="TouchGrassSetup" main.py
-      - name: Upload Windows Executable to Release
-        uses: softprops/action-gh-release@v1
+      - name: Upload Windows Executable
+        uses: softprops/action-gh-release@v2
         with:
           files: dist/TouchGrassSetup.exe
         env:
@@ -137,13 +201,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller pynput plyer
-          brew install create-dmg
-      - name: Build macOS Binary & DMG
+      - name: Build macOS Binary
         run: |
           pyinstaller --onefile --noconsole --name="TouchGrassSim" main.py
-          create-dmg --volname "Touch Grass SIM" --window-size 500 300 "TouchGrassSim.dmg" "dist/"
-      - name: Upload macOS DMG to Release
-        uses: softprops/action-gh-release@v1
+          hdiutil create -volname "TouchGrassSim" -srcfolder dist/ -ov -format UDZO TouchGrassSim.dmg
+      - name: Upload macOS DMG
+        uses: softprops/action-gh-release@v2
         with:
           files: TouchGrassSim.dmg
         env:
