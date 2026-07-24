@@ -1,34 +1,37 @@
-name: Build Cross-Platform Release Packages
+name: Build and Release
 
 on:
   push:
     tags:
       - 'v*'
 
-permissions:
-  contents: write
-
 jobs:
   build-linux-amd64:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.10'
 
-      - name: Install Build Dependencies
+      - name: Install dependencies and PyInstaller
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential zenity xxd
           python -m pip install --upgrade pip
-          pip install pyinstaller pynput plyer
+          pip install pyinstaller -r requirements.txt || pip install pyinstaller
 
-      - name: Build x86_64 .deb Package
+      - name: Build executable with PyInstaller
         run: |
           pyinstaller --onefile --noconsole --name='touch-grass-sim' main.py
-          mkdir -p pkg_amd64/DEBIAN pkg_amd64/usr/bin pkg_amd64/usr/share/applications
+
+      - name: Build AMD64 Debian Package
+        run: |
+          mkdir -p pkg_amd64/DEBIAN
+          mkdir -p pkg_amd64/usr/bin
+          mkdir -p pkg_amd64/usr/share/applications
+
           cp dist/touch-grass-sim pkg_amd64/usr/bin/
 
           cat << 'EOF' > pkg_amd64/DEBIAN/control
@@ -42,19 +45,23 @@ jobs:
 
           cat << 'EOF' > pkg_amd64/usr/share/applications/touch-grass-sim.desktop
           [Desktop Entry]
-          Name=Touch Grass SIM
-          Exec=touch-grass-sim
-          Terminal=false
           Type=Application
+          Name=Touch Grass SIM
+          Comment=Anti-doomscroll break timer and mindfulness tracker
+          Exec=/usr/bin/touch-grass-sim
+          Icon=preferences-system-time
+          Terminal=false
           Categories=Utility;
           EOF
 
           cat << 'EOF' > pkg_amd64/DEBIAN/postinst
           #!/bin/bash
           set -e
+
           DESKTOP_USER=$(who | grep -E '\(:[0-9]\)' | awk '{print $1}' | head -n 1)
           [ -z "$DESKTOP_USER" ] && DESKTOP_USER="${SUDO_USER:-$(logname 2>/dev/null || echo '')}"
           USER_ID=$(id -u "$DESKTOP_USER" 2>/dev/null || echo "1000")
+
           export DISPLAY=:0
           export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$USER_ID/bus"
 
@@ -74,6 +81,9 @@ jobs:
           AUTH_KEY=$(head -c 16 /dev/urandom | xxd -p 2>/dev/null || echo "TG-$(date +%s)")
           echo "{\"tracking_enabled\": $TRACKING, \"auth_key\": \"$AUTH_KEY\"}" > /etc/touch-grass-sim/config.json
 
+          update-desktop-database /usr/share/applications 2>/dev/null || true
+          gtk-update-icon-cache /usr/share/icons/hicolor 2>/dev/null || true
+
           su "$DESKTOP_USER" -c "zenity --info --title='Touch Grass SIM Installed!' --text='Setup complete!\n\nHotkey (Ctrl+Alt+G) and permissions registered successfully.' --width=400" 2>/dev/null || true
 
           exit 0
@@ -82,33 +92,41 @@ jobs:
           chmod 755 pkg_amd64/DEBIAN/postinst
           dpkg-deb --build pkg_amd64 touch-grass-sim_1.0.0_amd64.deb
 
-      - name: Upload amd64 .deb Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload AMD64 Artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: touch-grass-sim_1.0.0_amd64.deb
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: touch-grass-sim_1.0.0_amd64.deb
+          path: touch-grass-sim_1.0.0_amd64.deb
 
   build-linux-arm64:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up QEMU for ARM64 Emulation
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.10'
 
-      - name: Install Build Dependencies
+      - name: Install dependencies and PyInstaller
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential zenity xxd
           python -m pip install --upgrade pip
-          pip install pyinstaller pynput plyer
+          pip install pyinstaller -r requirements.txt || pip install pyinstaller
 
-      - name: Build ARM64 .deb Package
+      - name: Build executable with PyInstaller
         run: |
           pyinstaller --onefile --noconsole --name='touch-grass-sim' main.py
-          mkdir -p pkg_arm64/DEBIAN pkg_arm64/usr/bin pkg_arm64/usr/share/applications
+
+      - name: Build ARM64 Debian Package
+        run: |
+          mkdir -p pkg_arm64/DEBIAN
+          mkdir -p pkg_arm64/usr/bin
+          mkdir -p pkg_arm64/usr/share/applications
+
           cp dist/touch-grass-sim pkg_arm64/usr/bin/
 
           cat << 'EOF' > pkg_arm64/DEBIAN/control
@@ -122,19 +140,23 @@ jobs:
 
           cat << 'EOF' > pkg_arm64/usr/share/applications/touch-grass-sim.desktop
           [Desktop Entry]
-          Name=Touch Grass SIM
-          Exec=touch-grass-sim
-          Terminal=false
           Type=Application
+          Name=Touch Grass SIM
+          Comment=Anti-doomscroll break timer and mindfulness tracker
+          Exec=/usr/bin/touch-grass-sim
+          Icon=preferences-system-time
+          Terminal=false
           Categories=Utility;
           EOF
 
           cat << 'EOF' > pkg_arm64/DEBIAN/postinst
           #!/bin/bash
           set -e
+
           DESKTOP_USER=$(who | grep -E '\(:[0-9]\)' | awk '{print $1}' | head -n 1)
           [ -z "$DESKTOP_USER" ] && DESKTOP_USER="${SUDO_USER:-$(logname 2>/dev/null || echo '')}"
           USER_ID=$(id -u "$DESKTOP_USER" 2>/dev/null || echo "1000")
+
           export DISPLAY=:0
           export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$USER_ID/bus"
 
@@ -154,6 +176,9 @@ jobs:
           AUTH_KEY=$(head -c 16 /dev/urandom | xxd -p 2>/dev/null || echo "TG-$(date +%s)")
           echo "{\"tracking_enabled\": $TRACKING, \"auth_key\": \"$AUTH_KEY\"}" > /etc/touch-grass-sim/config.json
 
+          update-desktop-database /usr/share/applications 2>/dev/null || true
+          gtk-update-icon-cache /usr/share/icons/hicolor 2>/dev/null || true
+
           su "$DESKTOP_USER" -c "zenity --info --title='Touch Grass SIM Installed!' --text='Setup complete!\n\nHotkey (Ctrl+Alt+G) and permissions registered successfully.' --width=400" 2>/dev/null || true
 
           exit 0
@@ -162,52 +187,31 @@ jobs:
           chmod 755 pkg_arm64/DEBIAN/postinst
           dpkg-deb --build pkg_arm64 touch-grass-sim_1.0.0_arm64.deb
 
-      - name: Upload arm64 .deb Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload ARM64 Artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: touch-grass-sim_1.0.0_arm64.deb
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: touch-grass-sim_1.0.0_arm64.deb
+          path: touch-grass-sim_1.0.0_arm64.deb
 
-  build-windows:
-    runs-on: windows-latest
+  release:
+    needs: [build-linux-amd64, build-linux-arm64]
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Download AMD64 Artifact
+        uses: actions/download-artifact@v4
         with:
-          python-version: '3.11'
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pyinstaller pynput plyer
-      - name: Build Windows Executable
-        run: |
-          pyinstaller --onefile --noconsole --name="TouchGrassSetup" main.py
-      - name: Upload Windows Executable
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/TouchGrassSetup.exe
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: touch-grass-sim_1.0.0_amd64.deb
 
-  build-mac:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Download ARM64 Artifact
+        uses: actions/download-artifact@v4
         with:
-          python-version: '3.11'
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pyinstaller pynput plyer
-      - name: Build macOS Binary
-        run: |
-          pyinstaller --onefile --noconsole --name="TouchGrassSim" main.py
-          hdiutil create -volname "TouchGrassSim" -srcfolder dist/ -ov -format UDZO TouchGrassSim.dmg
-      - name: Upload macOS DMG
+          name: touch-grass-sim_1.0.0_arm64.deb
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: TouchGrassSim.dmg
+          files: |
+            touch-grass-sim_1.0.0_amd64.deb
+            touch-grass-sim_1.0.0_arm64.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
