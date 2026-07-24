@@ -69,33 +69,16 @@ jobs:
           #!/bin/bash
           set -e
 
-          DESKTOP_USER=$(who | grep -E '\(:[0-9]\)' | awk '{print $1}' | head -n 1)
-          [ -z "$DESKTOP_USER" ] && DESKTOP_USER="${SUDO_USER:-$(logname 2>/dev/null || echo '')}"
-          USER_ID=$(id -u "$DESKTOP_USER" 2>/dev/null || echo "1000")
-
-          export DISPLAY=:0
-          export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$USER_ID/bus"
-
-          if su "$DESKTOP_USER" -c "zenity --question --title='Touch Grass SIM Setup Wizard' --text='Welcome to Touch Grass SIM!\n\nWould you like to enable activity tracking to help schedule breaks?' --width=400" 2>/dev/null; then
-              TRACKING=true
-          else
-              TRACKING=false
-          fi
-
           echo 'KERNEL=="event*", NAME="input/%k", MODE="0644", TAG+="uaccess"' > /etc/udev/rules.d/99-touch-grass-sim.rules
           udevadm control --reload-rules || true
           udevadm trigger || true
 
+          DESKTOP_USER=$(who | grep -E '\(:[0-9]\)' | awk '{print $1}' | head -n 1)
+          [ -z "$DESKTOP_USER" ] && DESKTOP_USER="${SUDO_USER:-$(logname 2>/dev/null || echo '')}"
           [ -n "$DESKTOP_USER" ] && [ "$DESKTOP_USER" != "root" ] && usermod -aG input "$DESKTOP_USER" || true
-
-          mkdir -p /etc/touch-grass-sim
-          AUTH_KEY=$(head -c 16 /dev/urandom | xxd -p 2>/dev/null || echo "TG-$(date +%s)")
-          echo "{\"tracking_enabled\": $TRACKING, \"auth_key\": \"$AUTH_KEY\"}" > /etc/touch-grass-sim/config.json
 
           update-desktop-database /usr/share/applications 2>/dev/null || true
           gtk-update-icon-cache /usr/share/icons/hicolor 2>/dev/null || true
-
-          su "$DESKTOP_USER" -c "zenity --info --title='Touch Grass SIM Installed!' --text='Setup complete!\n\nHotkey (Ctrl+Alt+G) and permissions registered successfully.' --width=400" 2>/dev/null || true
 
           exit 0
           EOF
@@ -172,33 +155,16 @@ jobs:
           #!/bin/bash
           set -e
 
-          DESKTOP_USER=$(who | grep -E '\(:[0-9]\)' | awk '{print $1}' | head -n 1)
-          [ -z "$DESKTOP_USER" ] && DESKTOP_USER="${SUDO_USER:-$(logname 2>/dev/null || echo '')}"
-          USER_ID=$(id -u "$DESKTOP_USER" 2>/dev/null || echo "1000")
-
-          export DISPLAY=:0
-          export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$USER_ID/bus"
-
-          if su "$DESKTOP_USER" -c "zenity --question --title='Touch Grass SIM Setup Wizard' --text='Welcome to Touch Grass SIM!\n\nWould you like to enable activity tracking to help schedule breaks?' --width=400" 2>/dev/null; then
-              TRACKING=true
-          else
-              TRACKING=false
-          fi
-
           echo 'KERNEL=="event*", NAME="input/%k", MODE="0644", TAG+="uaccess"' > /etc/udev/rules.d/99-touch-grass-sim.rules
           udevadm control --reload-rules || true
           udevadm trigger || true
 
+          DESKTOP_USER=$(who | grep -E '\(:[0-9]\)' | awk '{print $1}' | head -n 1)
+          [ -z "$DESKTOP_USER" ] && DESKTOP_USER="${SUDO_USER:-$(logname 2>/dev/null || echo '')}"
           [ -n "$DESKTOP_USER" ] && [ "$DESKTOP_USER" != "root" ] && usermod -aG input "$DESKTOP_USER" || true
-
-          mkdir -p /etc/touch-grass-sim
-          AUTH_KEY=$(head -c 16 /dev/urandom | xxd -p 2>/dev/null || echo "TG-$(date +%s)")
-          echo "{\"tracking_enabled\": $TRACKING, \"auth_key\": \"$AUTH_KEY\"}" > /etc/touch-grass-sim/config.json
 
           update-desktop-database /usr/share/applications 2>/dev/null || true
           gtk-update-icon-cache /usr/share/icons/hicolor 2>/dev/null || true
-
-          su "$DESKTOP_USER" -c "zenity --info --title='Touch Grass SIM Installed!' --text='Setup complete!\n\nHotkey (Ctrl+Alt+G) and permissions registered successfully.' --width=400" 2>/dev/null || true
 
           exit 0
           EOF
