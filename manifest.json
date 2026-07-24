@@ -1,0 +1,10 @@
+{
+  "short_name": "Touch Grass",
+  "name": "Touch Grass SIM",
+  "icons": [],
+  "start_url": ".",
+  "background_color": "#2b1b10",
+  "theme_color": "#2b1b10",
+  "display": "standalone",
+  "orientation": "portrait"
+}

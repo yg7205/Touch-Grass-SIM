@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#2b1b10" />
+  <title>Touch Grass SIM</title>
+  
+  <link rel="manifest" href="manifest.json" />
+
+  <style>
+    * { 
+      box-sizing: border-box; 
+      user-select: none; 
+      touch-action: none; 
+    }
+    body, html { 
+      margin: 0; 
+      padding: 0; 
+      width: 100%; 
+      height: 100%; 
+      overflow: hidden; 
+      background: #2b1b10; 
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+      color: #ffe0b2; 
+    }
+    #app { 
+      position: relative; 
+      width: 100%; 
+      height: 100%; 
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+    }
+    header { 
+      margin-top: 30px; 
+      text-align: center; 
+      z-index: 10; 
+      padding: 0 16px;
+    }
+    h1 { 
+      margin: 0 0 6px; 
+      font-size: 1.8rem;
+    }
+    p { 
+      margin: 0 0 16px; 
+      color: #ffcc80; 
+      font-size: 0.95rem;
+    }
+    
+    .button-group {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .instant-btn, .notify-btn {
+      background: #4caf50;
+      color: #ffffff;
+      border: none;
+      padding: 10px 16px;
+      font-size: 0.9rem;
+      font-weight: bold;
+      border-radius: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      touch-action: manipulation;
+    }
+    .notify-btn {
+      background: #388e3c;
+    }
+    .notify-btn.active {
+      background: #1b5e20;
+    }
+    .instant-btn:active, .notify-btn:active {
+      transform: scale(0.96);
+    }
+
+    canvas { 
+      position: absolute; 
+      top: 0; 
+      left: 0; 
+      width: 100%; 
+      height: 100%; 
+      z-index: 1; 
+    }
+
+    #blackout { 
+      position: absolute; 
+      top: 0; 
+      left: 0; 
+      width: 100%; 
+      height: 100%; 
+      background: #000000; 
+      z-index: 100; 
+      display: none; 
+      flex-direction: column; 
+      justify-content: center; 
+      align-items: center; 
+      text-align: center;
+      padding: 20px;
+    }
+    #blackout h2 { 
+      color: #89b4fa; 
+      font-weight: 400; 
+      font-size: 1.8rem;
+      margin-bottom: 8px;
+    }
+    #blackout p {
+      color: #a6adc8;
+      font-size: 1rem;
+      margin-bottom: 24px;
+    }
+    #timer { 
+      color: #585b70; 
+      font-family: monospace; 
+      font-size: 1.1rem;
+    }
+    #unlock-hint {
+      color: #888888;
+      margin-top: 16px;
+      font-size: 0.9rem;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="app">
+    <header>
+      <h1>Touch Grass SIM</h1>
+      <p>Swipe through the grass to soothe your eyes</p>
+      
+      <div class="button-group">
+        <button class="instant-btn" onclick="triggerInstantBreak()">
+          Instant Break
+        </button>
+        <button id="notifyBtn" class="notify-btn" onclick="toggleNotifications()">
+          Enable Reminders
+        </button>
+      </div>
+    </header>
+
+    <canvas id="grassCanvas"></canvas>
+  </div>
+
+  <div id="blackout" onclick="tryEarlyUnlock()">
+    <h2 id="breathText">Inhale...</h2>
+    <p>Close your eyes, take deep breaths, or look outside.</p>
+    <div id="timer">Screen unlocks in 5:00</div>
+    <div id="unlock-hint">Tap anywhere to return</div>
+  </div>
+
+  <script>
+    let audioCtx = null;
+    function playWindSound() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      try {
+        const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.1, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        let last = 0;
+        for (let i = 0; i < data.length; i++) {
+          data[i] = (last + (0.02 * (Math.random() * 2 - 1))) / 1.02;
+          last = data[i]; 
+          data[i] *= 0.15;
+        }
+        const src = audioCtx.createBufferSource();
+        src.buffer = buffer;
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass'; 
+        filter.frequency.value = 250;
+        src.connect(filter); 
+        filter.connect(audioCtx.destination);
+        src.start();
+      } catch(e) {}
+    }
+
+    const canvas = document.getElementById('grassCanvas');
+    const ctx = canvas.getContext('2d');
+    let width, height, blades = [];
+
+    function resize() {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+      blades = [];
+      const colors = ['#66bb6a', '#4caf50', '#388e3c', '#81c784'];
+      for (let i = 0; i < Math.floor(width / 8); i++) {
+        blades.push({
+          x: i * 8, 
+          y: height, 
+          height: 160 + Math.random() * 120,
+          sway: 0, 
+          color: colors[i % colors.length]
+        });
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, width, height);
+      blades.forEach(b => {
+        ctx.beginPath();
+        ctx.moveTo(b.x, b.y);
+        ctx.quadraticCurveTo(b.x + b.sway * 0.5, b.y - b.height * 0.5, b.x + b.sway, b.y - b.height);
+        ctx.strokeStyle = b.color; 
+        ctx.lineWidth = 4; 
+        ctx.lineCap = 'round'; 
+        ctx.stroke();
+        b.sway *= 0.88;
+      });
+      requestAnimationFrame(draw);
+    }
+
+    function touch(x) {
+      blades.forEach(b => {
+        if (Math.abs(x - b.x) < 50) {
+          b.sway = x > b.x ? 30 : -30;
+          if (Math.random() < 0.1) playWindSound();
+        }
+      });
+    }
+
+    window.addEventListener('touchmove', e => touch(e.touches[0].clientX));
+    window.addEventListener('mousemove', e => touch(e.clientX));
+    window.addEventListener('resize', resize);
+    resize(); 
+    draw();
+
+    let remainingTime = 300;
+    let timerInterval = null;
+    let breathStep = 0;
+
+    function triggerInstantBreak() {
+      document.getElementById('blackout').style.display = 'flex';
+      remainingTime = 300;
+      
+      if (timerInterval) clearInterval(timerInterval);
+
+      timerInterval = setInterval(() => {
+        remainingTime--;
+        
+        breathStep += 0.1;
+        const breathVal = Math.sin(breathStep);
+        const breathEl = document.getElementById('breathText');
+        if (breathVal > 0.7) breathEl.innerText = "Hold...";
+        else if (breathVal < -0.7) breathEl.innerText = "Exhale...";
+        else breathEl.innerText = "Inhale...";
+
+        if (remainingTime > 0) {
+          const m = Math.floor(remainingTime / 60);
+          const s = remainingTime % 60;
+          document.getElementById('timer').innerText = `Screen unlocks in ${m}:${s < 10 ? '0' : ''}${s}`;
+        } else {
+          clearInterval(timerInterval);
+          document.getElementById('timer').innerText = "Break complete!";
+          document.getElementById('unlock-hint').style.display = 'block';
+        }
+      }, 1000);
+    }
+
+    function tryEarlyUnlock() {
+      if (remainingTime <= 0) {
+        document.getElementById('blackout').style.display = 'none';
+        document.getElementById('unlock-hint').style.display = 'none';
+      }
+    }
+
+    let notificationTimer = null;
+    const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+
+    function checkNotificationStatus() {
+      const btn = document.getElementById('notifyBtn');
+      if (Notification.permission === 'granted' && localStorage.getItem('reminders_enabled') === 'true') {
+        btn.innerText = "Reminders On";
+        btn.classList.add('active');
+        scheduleNextReminder();
+      } else {
+        btn.innerText = "Enable Reminders";
+        btn.classList.remove('active');
+      }
+    }
+
+    function toggleNotifications() {
+      if (!("Notification" in window)) {
+        alert("This browser does not support web notifications.");
+        return;
+      }
+
+      if (Notification.permission === "granted") {
+        const currentState = localStorage.getItem('reminders_enabled') === 'true';
+        if (currentState) {
+          localStorage.setItem('reminders_enabled', 'false');
+          if (notificationTimer) clearTimeout(notificationTimer);
+          alert("Scheduled reminders disabled.");
+        } else {
+          localStorage.setItem('reminders_enabled', 'true');
+          scheduleNextReminder();
+          alert("Reminders enabled! You will get a notification every 4 hours.");
+        }
+        checkNotificationStatus();
+      } else if (Notification.permission !== "denied") {
+        Notification.requestPermission().then(permission => {
+          if (permission === "granted") {
+            localStorage.setItem('reminders_enabled', 'true');
+            scheduleNextReminder();
+            alert("Reminders enabled! You will get a notification every 4 hours.");
+          } else {
+            alert("Notification permission denied.");
+          }
+          checkNotificationStatus();
+        });
+      } else {
+        alert("Notifications are blocked in your browser settings. Please enable them in your phone settings.");
+      }
+    }
+
+    function scheduleNextReminder() {
+      if (notificationTimer) clearTimeout(notificationTimer);
+      notificationTimer = setTimeout(() => {
+        if (localStorage.getItem('reminders_enabled') === 'true' && Notification.permission === 'granted') {
+          new Notification("Touch Grass SIM", {
+            body: "Time for a 5-minute eye rest! Tap to take your break."
+          });
+          scheduleNextReminder();
+        }
+      }, FOUR_HOURS_MS);
+    }
+
+    if ("Notification" in window) {
+      checkNotificationStatus();
+    }
+  </script>
+</body>
+</html>
