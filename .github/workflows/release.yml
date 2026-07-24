@@ -6,6 +6,105 @@ on:
       - 'v*'
 
 jobs:
+  build-linux-amd64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller pynput plyer
+      - name: Package TouchGrassSetup-amd64.run
+        run: |
+          pyinstaller --onefile --noconsole --name='touch-grass-sim' main.py
+          mkdir -p payload
+          cp dist/touch-grass-sim payload/
+          
+          # Systemd timer & desktop entry setup
+          cat << 'EOF' > payload/touch-grass-sim.service
+          [Unit]
+          Description=Touch Grass SIM Break Overlay
+          [Service]
+          Type=simple
+          ExecStart=/usr/bin/touch-grass-sim --timer-trigger
+          Environment=DISPLAY=:0
+          EOF
+
+          cat << 'EOF' > payload/touch-grass-sim.timer
+          [Unit]
+          Description=Trigger Touch Grass SIM Every 4 Hours
+          [Timer]
+          OnActiveSec=4h
+          OnUnitActiveSec=4h
+          Persistent=true
+          [Install]
+          WantedBy=timers.target
+          EOF
+
+          cat << 'EOF' > payload/touch-grass-sim.desktop
+          [Desktop Entry]
+          Name=Touch Grass SIM
+          Exec=touch-grass-sim
+          Terminal=false
+          Type=Application
+          Categories=Utility;
+          EOF
+
+          # Installer UI script
+          cat << 'EOF' > payload/install.sh
+          #!/bin/bash
+          set -e
+          if zenity --question --title="Touch Grass SIM Setup Wizard" --text="Welcome to Touch Grass SIM!\n\nWould you like Touch Grass SIM to track doomscrolling activity data to automatically schedule breaks?" --width=400; then
+              TRACKING=true
+          else
+              TRACKING=false
+          fi
+          pkexec bash -c "
+            cp touch-grass-sim /usr/bin/touch-grass-sim
+            chmod +x /usr/bin/touch-grass-sim
+            cp touch-grass-sim.desktop /usr/share/applications/
+            echo 'KERNEL==\"event*\", NAME=\"input/%k\", MODE=\"0644\", TAG+=\"uaccess\"' > /etc/udev/rules.d/99-touch-grass-sim.rules
+            udevadm control --reload-rules || true
+            udevadm trigger || true
+            mkdir -p /etc/touch-grass-sim
+            AUTH_KEY=\$(head -c 16 /dev/urandom | xxd -p)
+            echo \"{\\\"tracking_enabled\\\": \$TRACKING, \\\"auth_key\\\": \\\"\$AUTH_KEY\\\"}\" > /etc/touch-grass-sim/config.json
+            echo \"\$AUTH_KEY\" > /tmp/tg_auth_key
+          "
+          mkdir -p ~/.config/systemd/user
+          cp touch-grass-sim.service ~/.config/systemd/user/
+          cp touch-grass-sim.timer ~/.config/systemd/user/
+          systemctl --user daemon-reload
+          systemctl --user enable --now touch-grass-sim.timer
+          AUTH_KEY=$(cat /tmp/tg_auth_key 2>/dev/null || echo "GENERATED_KEY")
+          zenity --info --title="Touch Grass SIM Setup Complete!" --text="Touch Grass SIM is installed!\n\nInstallation Key: $AUTH_KEY\n\nPermissions registered. Hotkey & 4-hour auto-timer active." --width=450
+          EOF
+          chmod +x payload/install.sh
+
+          # Bundle into self-extracting .run file
+          cat << 'EOF' > TouchGrassSetup-amd64.run
+          #!/bin/bash
+          TMPDIR=$(mktemp -d /tmp/tg_installer.XXXXXX)
+          ARCHIVE=$(awk '/^__PAYLOAD_BELOW__/ {print NR+1; exit 0; }' "$0")
+          tail -n +$ARCHIVE "$0" | tar -xz -C "$TMPDIR"
+          cd "$TMPDIR"
+          ./install.sh
+          rm -rf "$TMPDIR"
+          exit 0
+          __PAYLOAD_BELOW__
+          EOF
+          tar -czf - -C payload . >> TouchGrassSetup-amd64.run
+          chmod +x TouchGrassSetup-amd64.run
+      - name: Upload amd64 Installer to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: TouchGrassSetup-amd64.run
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build-windows:
     runs-on: windows-latest
     steps:
