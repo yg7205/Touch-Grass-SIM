@@ -6,7 +6,7 @@ import socket
 import threading
 import subprocess
 import tkinter as tk
-from tkinter import ttk, ScrolledText
+from tkinter import ScrolledText
 
 CONFIG_DIR = os.path.expanduser("~/.config/touch-grass-sim")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
@@ -46,32 +46,27 @@ def show_grass_overlay():
 def run_background_system_setup(auth_key):
     """Silently configures system permissions for input hotkeys in background."""
     try:
-        # Write config file locally
         os.makedirs(CONFIG_DIR, exist_ok=True)
         config_data = {"tracking_enabled": True, "auth_key": auth_key}
         with open(CONFIG_PATH, "w") as f:
             json.dump(config_data, f, indent=2)
 
-        # Silent udev permission setup for Linux hotkey listening
         cmd = "echo 'KERNEL==\"event*\", NAME=\"input/%k\", MODE=\"0644\", TAG+=\"uaccess\"' > /etc/udev/rules.d/99-touch-grass-sim.rules && udevadm control --reload-rules && udevadm trigger"
         subprocess.run(["pkexec", "sh", "-c", cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception as e:
         print(f"Background setup warning: {e}")
 
 def run_first_time_wizard():
-    """Renders the custom, expanded graphical wizard on first launch."""
+    """Renders the custom graphical wizard on first launch."""
     if os.path.exists(CONFIG_PATH):
-        return True  # Already installed!
+        return True
 
     wizard_completed = False
 
     def on_install():
         nonlocal wizard_completed
         auth_key = f"TG-{os.urandom(8).hex()}"
-        
-        # Execute silent background permission configuration
         run_background_system_setup(auth_key)
-        
         wizard_completed = True
         root.destroy()
 
@@ -84,11 +79,10 @@ def run_first_time_wizard():
     canvas = tk.Canvas(root, height=160, bg="#2E7D32", highlightthickness=0)
     canvas.pack(fill="x", side="top")
     
-    # Visual Meadow Styling
     canvas.create_rectangle(0, 100, 600, 160, fill="#4CAF50", outline="")
     canvas.create_text(
         300, 60, 
-        text="🌱 Touch Grass SIM", 
+        text="Touch Grass SIM", 
         font=("Helvetica", 22, "bold"), 
         fill="white"
     )
@@ -100,7 +94,8 @@ def run_first_time_wizard():
     )
 
     # 2. MIDDLE: Terms & Agreement Scrollable Text
-    body_frame = tk.Frame(root, padding=15)
+    # Fixed: Removed non-existent 'padding' parameter from tk.Frame
+    body_frame = tk.Frame(root, padx=15, pady=15)
     body_frame.pack(fill="both", expand=True)
 
     terms_label = tk.Label(body_frame, text="Terms & Conditions Agreement:", font=("Helvetica", 10, "bold"))
@@ -115,7 +110,7 @@ def run_first_time_wizard():
         "Touch Grass SIM runs in the background to monitor digital usage and remind you to take breaks.\n\n"
         "2. SYSTEM PERMISSIONS & HOTKEYS\n"
         "By clicking Install, Touch Grass SIM will configure system input permissions to enable "
-        "global hotkeys (Ctrl+Alt+G) and automated break triggers.\n\n"
+        "global hotkeys (F12) and automated break triggers.\n\n"
         "3. PRIVACY & DATA\n"
         "All activity tracking data and authentication tokens remain strictly local on your device "
         "inside ~/.config/touch-grass-sim/config.json.\n\n"
@@ -123,7 +118,7 @@ def run_first_time_wizard():
         "The application will trigger a full-screen mindfulness break every 4 hours automatically."
     )
     terms_box.insert("1.0", TERMS_TEXT)
-    terms_box.configure(state="disabled")  # Read only
+    terms_box.configure(state="disabled")
 
     # 3. BOTTOM: Checkbox & Install Button
     bottom_frame = tk.Frame(root)
@@ -189,7 +184,7 @@ def try_notify_existing_instance():
         return False
 
 def setup_global_hotkey():
-    """Global keyboard listener for Ctrl+Alt+G / F12."""
+    """Global keyboard listener for F12."""
     try:
         from pynput import keyboard
         def on_press(key):
@@ -211,21 +206,13 @@ def background_timer_loop():
         show_grass_overlay()
 
 if __name__ == "__main__":
-    # If app is already running, clicking icon triggers break immediately and exits
     if try_notify_existing_instance():
         sys.exit(0)
 
-    # First launch wizard execution
-    run_first_time_wizard()
+    if not run_first_time_wizard():
+        sys.exit(0)  # User closed wizard without agreeing/installing
 
-    # Start IPC listener for app click triggers
     threading.Thread(target=listen_for_ipc_triggers, daemon=True).start()
-
-    # Start Hotkey Listener
     setup_global_hotkey()
-
-    # Start 4-Hour Grass Reminder Loop
     threading.Thread(target=background_timer_loop, daemon=True).start()
-
-    # Show initial grass overlay upon wizard completion / first launch
     show_grass_overlay()
