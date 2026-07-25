@@ -3,7 +3,6 @@ import sys
 import os
 import json
 import subprocess
-import sys
 
 CONFIG_DIR = "/etc/touch-grass-sim"
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
@@ -11,6 +10,9 @@ CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
 def ensure_first_run_setup():
     if os.path.exists(CONFIG_PATH):
         return  # Setup already completed!
+
+    # Capture current GUI display environment (required for GUI popups in desktop launchers)
+    env = os.environ.copy()
 
     try:
         # Prompt user via Zenity (runs natively in the active desktop session)
@@ -21,7 +23,8 @@ def ensure_first_run_setup():
                 "--text=Welcome to Touch Grass SIM!\n\nWould you like to enable activity tracking to help schedule breaks?",
                 "--width=400"
             ],
-            capture_output=True
+            capture_output=True,
+            env=env
         )
         tracking_enabled = (res.returncode == 0)
 
@@ -31,7 +34,7 @@ def ensure_first_run_setup():
 
         # Write config file to system directory using pkexec
         cmd = f"mkdir -p {CONFIG_DIR} && echo '{config_data}' > {CONFIG_PATH}"
-        subprocess.run(["pkexec", "sh", "-c", cmd], check=True)
+        subprocess.run(["pkexec", "sh", "-c", cmd], check=True, env=env)
 
         # Show completion dialog
         subprocess.run([
@@ -39,14 +42,13 @@ def ensure_first_run_setup():
             "--title=Touch Grass SIM Ready!",
             f"--text=Setup Complete!\n\nHotkey: Ctrl+Alt+G\nAuth Key: {auth_key}",
             "--width=400"
-        ])
+        ], env=env)
     except Exception as e:
         print(f"Setup Wizard Error: {e}")
 
-if __name__ == "__main__":
+def main():
     ensure_first_run_setup()
     
-def main():
     print("Starting Touch Grass SIM desktop engine...")
     print("Listening for break triggers and monitoring active window titles...")
     
