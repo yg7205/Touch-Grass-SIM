@@ -1,4 +1,4 @@
-name: Build & Publish Release Packages
+name: Build and Release
 
 on:
   push:
@@ -7,20 +7,18 @@ on:
 
 jobs:
   build:
-    name: Build Packages
+    permissions:
+      contents: write
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
-            arch: amd64
-            target_deb: touch-grass-sim_1.0.0_amd64.deb
-            pkg_dir: pkg_amd64
-          - os: ubuntu-latest
-            arch: arm64
-            target_deb: touch-grass-sim_1.0.0_arm64.deb
-            pkg_dir: pkg_arm64
+            asset_name: touch-grass-sim-linux
+          - os: windows-latest
+            asset_name: touch-grass-sim-windows
+          - os: macos-latest
+            asset_name: touch-grass-sim-mac
 
     steps:
       - name: Checkout Code
@@ -29,56 +27,39 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
-      - name: Install PyInstaller and Dependencies
+      - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller pynput
+          pip install pyinstaller
 
-      - name: Build Standalone Executable Binary
+      # --- LINUX BUILD (.deb packages) ---
+      - name: Build Linux .deb Packages
+        if: runner.os == 'Linux'
         run: |
-          pyinstaller --noconfirm --onedir --windowed \
-            --name touch-grass-sim \
-            main.py
+          sudo apt-get update && sudo apt-get install -y dpkg-dev
+          dpkg-deb --build pkg_arm64 touch-grass-sim_1.0.0_arm64.deb
+          dpkg-deb --build pkg_amd64 touch-grass-sim_1.0.0_amd64.deb
 
-      - name: Setup Debian Package Directory Structure
+      # --- WINDOWS BUILD (.exe) ---
+      - name: Build Windows Executable
+        if: runner.os == 'Windows'
         run: |
-          # Copy built binary into the debian staging folder structure
-          mkdir -p ${{ matrix.pkg_dir }}/usr/bin/
-          cp -r dist/touch-grass-sim/* ${{ matrix.pkg_dir }}/usr/bin/
-          chmod +x ${{ matrix.pkg_dir }}/usr/bin/touch-grass-sim
-          chmod +x ${{ matrix.pkg_dir }}/DEBIAN/postinst
+          pyinstaller --onefile --windowed --name="Touch-Grass-Sim" main.py
 
-      - name: Build Debian Package
+      # --- MACOS BUILD (.app / executable) ---
+      - name: Build macOS Application
+        if: runner.os == 'macOS'
         run: |
-          dpkg-deb --build ${{ matrix.pkg_dir }} ${{ matrix.target_deb }}
+          pyinstaller --onefile --windowed --name="Touch-Grass-Sim" main.py
 
-      - name: Upload Artifacts for Release Job
-        uses: actions/upload-artifact@v4
-        with:
-          name: deb-packages-${{ matrix.arch }}
-          path: ${{ matrix.target_deb }}
-
-  release:
-    name: Create GitHub Release
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Download Built Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: release-assets
-          merge-multiple: true
-
-      - name: Publish Release & Upload Assets
+      # --- UPLOAD TO GITHUB RELEASES ---
+      - name: Upload Binaries to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release-assets/*
+          files: |
+            *.deb
+            dist/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
