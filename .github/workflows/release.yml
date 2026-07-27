@@ -1,4 +1,4 @@
-name: Build and Release
+name: Build & Publish Release Packages
 
 on:
   push:
@@ -6,10 +6,24 @@ on:
       - 'v*'
 
 jobs:
-  build-linux-amd64:
-    runs-on: ubuntu-latest
+  build:
+    name: Build Packages
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: amd64
+            target_deb: touch-grass-sim_1.0.0_amd64.deb
+            pkg_dir: pkg_amd64
+          - os: ubuntu-latest
+            arch: arm64
+            target_deb: touch-grass-sim_1.0.0_arm64.deb
+            pkg_dir: pkg_arm64
+
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -17,240 +31,54 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
+      - name: Install PyInstaller and Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller pynput
-          [ -f requirements.txt ] && pip install -r requirements.txt || true
-          sudo apt-get update && sudo apt-get install -y imagemagick python3-tk
 
-      - name: Build executable with PyInstaller
+      - name: Build Standalone Executable Binary
         run: |
-          pyinstaller --onefile --noconsole --name='touch-grass-sim' main.py
+          pyinstaller --noconfirm --onedir --windowed \
+            --name touch-grass-sim \
+            main.py
 
-      - name: Generate Custom Grass Icon
+      - name: Setup Debian Package Directory Structure
         run: |
-          mkdir -p pkg_amd64/usr/share/icons/hicolor/128x128/apps
-          convert -size 128x128 xc:transparent \
-            -fill "#4CAF50" -draw "ellipse 64,100 45,15 0,360" \
-            -fill "#2E7D32" -draw "path 'M 40,95 Q 30,50 20,20 Q 45,45 50,95 Z'" \
-            -fill "#4CAF50" -draw "path 'M 64,95 Q 64,35 64,10 Q 75,40 76,95 Z'" \
-            -fill "#81C784" -draw "path 'M 88,95 Q 98,50 108,20 Q 83,45 78,95 Z'" \
-            pkg_amd64/usr/share/icons/hicolor/128x128/apps/touch-grass-sim.png
+          # Copy built binary into the debian staging folder structure
+          mkdir -p ${{ matrix.pkg_dir }}/usr/bin/
+          cp -r dist/touch-grass-sim/* ${{ matrix.pkg_dir }}/usr/bin/
+          chmod +x ${{ matrix.pkg_dir }}/usr/bin/touch-grass-sim
+          chmod +x ${{ matrix.pkg_dir }}/DEBIAN/postinst
 
-      - name: Build AMD64 Debian Package
+      - name: Build Debian Package
         run: |
-          mkdir -p pkg_amd64/DEBIAN
-          mkdir -p pkg_amd64/usr/bin
-          mkdir -p pkg_amd64/usr/share/applications
+          dpkg-deb --build ${{ matrix.pkg_dir }} ${{ matrix.target_deb }}
 
-          cp dist/touch-grass-sim pkg_amd64/usr/bin/
-
-          cat << 'EOF' > pkg_amd64/DEBIAN/control
-          Package: touch-grass-sim
-          Version: 1.0.0
-          Architecture: amd64
-          Maintainer: yg7205
-          Depends: zenity, python3-tk
-          Description: Anti-doomscroll break timer with automated setup wizard.
-          EOF
-
-          cat << 'EOF' > pkg_amd64/usr/share/applications/touch-grass-sim.desktop
-          [Desktop Entry]
-          Type=Application
-          Name=Touch Grass SIM
-          Comment=Anti-doomscroll break timer and mindfulness tracker
-          Exec=/usr/bin/touch-grass-sim
-          Icon=touch-grass-sim
-          Terminal=false
-          Categories=Utility;
-          EOF
-
-          cat << 'EOF' > pkg_amd64/DEBIAN/postinst
-          #!/bin/bash
-          set -e
-          echo 'KERNEL=="event*", NAME="input/%k", MODE="0644", TAG+="uaccess"' > /etc/udev/rules.d/99-touch-grass-sim.rules
-          udevadm control --reload-rules || true
-          udevadm trigger || true
-          update-desktop-database /usr/share/applications 2>/dev/null || true
-          gtk-update-icon-cache /usr/share/icons/hicolor 2>/dev/null || true
-          exit 0
-          EOF
-
-          chmod 755 pkg_amd64/DEBIAN/postinst
-          dpkg-deb --build pkg_amd64 touch-grass-sim_1.0.0_amd64.deb
-
-      - name: Upload AMD64 Artifact
+      - name: Upload Artifacts for Release Job
         uses: actions/upload-artifact@v4
         with:
-          name: touch-grass-sim_1.0.0_amd64.deb
-          path: touch-grass-sim_1.0.0_amd64.deb
-
-  build-linux-arm64:
-    runs-on: ubuntu-24.04-arm
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pyinstaller pynput
-          [ -f requirements.txt ] && pip install -r requirements.txt || true
-          sudo apt-get update && sudo apt-get install -y imagemagick python3-tk
-
-      - name: Build executable with PyInstaller
-        run: |
-          pyinstaller --onefile --noconsole --name='touch-grass-sim' main.py
-
-      - name: Generate Custom Grass Icon
-        run: |
-          mkdir -p pkg_arm64/usr/share/icons/hicolor/128x128/apps
-          convert -size 128x128 xc:transparent \
-            -fill "#4CAF50" -draw "ellipse 64,100 45,15 0,360" \
-            -fill "#2E7D32" -draw "path 'M 40,95 Q 30,50 20,20 Q 45,45 50,95 Z'" \
-            -fill "#4CAF50" -draw "path 'M 64,95 Q 64,35 64,10 Q 75,40 76,95 Z'" \
-            -fill "#81C784" -draw "path 'M 88,95 Q 98,50 108,20 Q 83,45 78,95 Z'" \
-            pkg_arm64/usr/share/icons/hicolor/128x128/apps/touch-grass-sim.png
-
-      - name: Build ARM64 Debian Package
-        run: |
-          mkdir -p pkg_arm64/DEBIAN
-          mkdir -p pkg_arm64/usr/bin
-          mkdir -p pkg_arm64/usr/share/applications
-
-          cp dist/touch-grass-sim pkg_arm64/usr/bin/
-
-          cat << 'EOF' > pkg_arm64/DEBIAN/control
-          Package: touch-grass-sim
-          Version: 1.0.0
-          Architecture: arm64
-          Maintainer: yg7205
-          Depends: zenity, python3-tk
-          Description: Anti-doomscroll break timer with automated setup wizard.
-          EOF
-
-          cat << 'EOF' > pkg_arm64/usr/share/applications/touch-grass-sim.desktop
-          [Desktop Entry]
-          Type=Application
-          Name=Touch Grass SIM
-          Comment=Anti-doomscroll break timer and mindfulness tracker
-          Exec=/usr/bin/touch-grass-sim
-          Icon=touch-grass-sim
-          Terminal=false
-          Categories=Utility;
-          EOF
-
-          cat << 'EOF' > pkg_arm64/DEBIAN/postinst
-          #!/bin/bash
-          set -e
-          echo 'KERNEL=="event*", NAME="input/%k", MODE="0644", TAG+="uaccess"' > /etc/udev/rules.d/99-touch-grass-sim.rules
-          udevadm control --reload-rules || true
-          udevadm trigger || true
-          update-desktop-database /usr/share/applications 2>/dev/null || true
-          gtk-update-icon-cache /usr/share/icons/hicolor 2>/dev/null || true
-          exit 0
-          EOF
-
-          chmod 755 pkg_arm64/DEBIAN/postinst
-          dpkg-deb --build pkg_arm64 touch-grass-sim_1.0.0_arm64.deb
-
-      - name: Upload ARM64 Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: touch-grass-sim_1.0.0_arm64.deb
-          path: touch-grass-sim_1.0.0_arm64.deb
-
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pyinstaller pynput
-          if (Test-Path requirements.txt) { pip install -r requirements.txt }
-
-      - name: Build Windows EXE with PyInstaller
-        run: |
-          pyinstaller --onefile --noconsole --name="TouchGrassSetup" main.py
-
-      - name: Upload Windows Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: TouchGrassSetup.exe
-          path: dist/TouchGrassSetup.exe
-
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Install dependencies & create-dmg
-        run: |
-          python -m pip install --upgrade pip
-          pip install pyinstaller pynput
-          [ -f requirements.txt ] && pip install -r requirements.txt || true
-          brew install create-dmg
-
-      - name: Build macOS App Bundle
-        run: |
-          pyinstaller --onefile --windowed --name="TouchGrassSim" main.py
-
-      - name: Package into DMG
-        run: |
-          mkdir -p dmg_src
-          cp -R "dist/TouchGrassSim.app" dmg_src/
-          create-dmg \
-            --volname "Touch Grass Sim" \
-            --window-size 500 300 \
-            --icon-size 100 \
-            --app-drop-link 350 125 \
-            --overwrite \
-            "TouchGrassSim.dmg" \
-            "dmg_src/"
-
-      - name: Upload macOS Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: TouchGrassSim.dmg
-          path: TouchGrassSim.dmg
+          name: deb-packages-${{ matrix.arch }}
+          path: ${{ matrix.target_deb }}
 
   release:
-    needs: [build-linux-amd64, build-linux-arm64, build-windows, build-macos]
+    name: Create GitHub Release
+    needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Download all build artifacts to root
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download Built Artifacts
         uses: actions/download-artifact@v4
         with:
-          path: .
+          path: release-assets
           merge-multiple: true
 
-      - name: Create GitHub Release
+      - name: Publish Release & Upload Assets
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            touch-grass-sim_1.0.0_amd64.deb
-            touch-grass-sim_1.0.0_arm64.deb
-            TouchGrassSetup.exe
-            TouchGrassSim.dmg
+          files: release-assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
