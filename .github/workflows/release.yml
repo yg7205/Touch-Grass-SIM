@@ -238,15 +238,19 @@ jobs:
     needs: [build-linux-amd64, build-linux-arm64, build-windows, build-macos]
     runs-on: ubuntu-latest
     steps:
-      - name: Download all build artifacts
+      - name: Download all build artifacts to root
         uses: actions/download-artifact@v4
         with:
-          path: dist_release
+          path: .
           merge-multiple: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist_release/*
+          files: |
+            touch-grass-sim_1.0.0_amd64.deb
+            touch-grass-sim_1.0.0_arm64.deb
+            TouchGrassSetup.exe
+            TouchGrassSim.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
