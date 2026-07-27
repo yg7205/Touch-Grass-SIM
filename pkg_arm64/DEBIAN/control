@@ -2,8 +2,8 @@ Package: touch-grass-sim
 Version: 1.0.0
 Architecture: arm64
 Maintainer: Touch Grass SIM Team <support@touchgrass.sim>
-Depends: python3, python3-tk, python3-pip, libcanberra-gtk3-module
+Depends: python3, python3-tk, python3-pynput, python3-pil, python3-pil.imagetk, libcanberra-gtk3-module
 Section: utils
 Priority: optional
 Description: Digital Wellness and Mindful Break Scheduler
- A mindful break enforcement tool featuring interactive wizard setup and system break overlays.
+ Touch Grass SIM features an anime sunrise wizard, locked 5-minute break timers, and global hotkeys.

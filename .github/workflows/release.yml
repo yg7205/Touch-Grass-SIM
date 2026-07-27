@@ -1,4 +1,4 @@
-name: Build and Release
+name: Build and Publish Releases
 
 on:
   push:
@@ -7,18 +7,24 @@ on:
 
 jobs:
   build:
-    permissions:
-      contents: write
+    name: Build Multi-Platform Packages
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
-            asset_name: touch-grass-sim-linux
+            platform: linux-amd64
+            pkg_dir: pkg_amd64
+            target_deb: touch-grass-sim_1.0.0_amd64.deb
+          - os: ubuntu-latest
+            platform: linux-arm64
+            pkg_dir: pkg_arm64
+            target_deb: touch-grass-sim_1.0.0_arm64.deb
           - os: windows-latest
-            asset_name: touch-grass-sim-windows
+            platform: windows-amd64
           - os: macos-latest
-            asset_name: touch-grass-sim-mac
+            platform: macos-universal
 
     steps:
       - name: Checkout Code
@@ -29,37 +35,57 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pyinstaller
-
       # --- LINUX BUILD (.deb packages) ---
-      - name: Build Linux .deb Packages
+      - name: Build Debian Package (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update && sudo apt-get install -y dpkg-dev
-          dpkg-deb --build pkg_arm64 touch-grass-sim_1.0.0_arm64.deb
-          dpkg-deb --build pkg_amd64 touch-grass-sim_1.0.0_amd64.deb
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev
+          chmod +x ${{ matrix.pkg_dir }}/DEBIAN/postinst || true
+          dpkg-deb --build ${{ matrix.pkg_dir }} ${{ matrix.target_deb }}
 
       # --- WINDOWS BUILD (.exe) ---
       - name: Build Windows Executable
         if: runner.os == 'Windows'
         run: |
-          pyinstaller --onefile --windowed --name="Touch-Grass-Sim" main.py
+          python -m pip install --upgrade pip
+          pip install pyinstaller pynput
+          pyinstaller --noconfirm --onefile --windowed --name "Touch-Grass-Sim-Installer" main.py
 
-      # --- MACOS BUILD (.app / executable) ---
+      # --- MACOS BUILD (.app bundle) ---
       - name: Build macOS Application
         if: runner.os == 'macOS'
         run: |
-          pyinstaller --onefile --windowed --name="Touch-Grass-Sim" main.py
+          python -m pip install --upgrade pip
+          pip install pyinstaller pynput
+          pyinstaller --noconfirm --windowed --name "Touch-Grass-Sim" main.py
 
-      # --- UPLOAD TO GITHUB RELEASES ---
-      - name: Upload Binaries to Release
+      # --- UPLOAD ARTIFACTS ---
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: assets-${{ matrix.platform }}
+          path: |
+            *.deb
+            dist/*.exe
+            dist/*.app
+
+  release:
+    name: Publish Release Assets
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            *.deb
-            dist/*
+          files: release-assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

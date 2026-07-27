@@ -1,24 +1,35 @@
 #!/bin/sh
 set -e
 
-# 1. Register global hotkey input permissions (Ctrl + Alt + G)
+# Fix global input rules for hotkeys
 echo 'KERNEL=="event*", NAME="input/%k", MODE="0644", TAG+="uaccess"' > /etc/udev/rules.d/99-touch-grass-sim.rules
 udevadm control --reload-rules || true
 udevadm trigger || true
 
-# 2. Place autostart trigger so GNOME spawns the wizard immediately for active users
+# Register global autostart so GNOME/KDE launches the wizard on desktop session load
 mkdir -p /etc/xdg/autostart
-cat << 'EOF' > /etc/xdg/autostart/touch-grass-sim-wizard.desktop
+cat << 'EOF' > /etc/xdg/autostart/touch-grass-sim.desktop
 [Desktop Entry]
 Type=Application
 Name=Touch Grass SIM Setup Wizard
 Exec=/usr/bin/touch-grass-sim
 Icon=preferences-system-time
 Terminal=false
-NoDisplay=true
+Categories=Utility;
 X-GNOME-Autostart-enabled=true
 EOF
 
-chmod 644 /etc/xdg/autostart/touch-grass-sim-wizard.desktop
+chmod 644 /etc/xdg/autostart/touch-grass-sim.desktop
+
+# Trigger the wizard for the current logged-in desktop user immediately
+ACTIVE_USER=$(who | grep -E '\(:[0-9]\)|wayland' | awk '{print $1}' | head -n 1)
+if [ -n "$ACTIVE_USER" ] && [ "$ACTIVE_USER" != "root" ]; then
+    USER_ID=$(id -u "$ACTIVE_USER")
+    nohup sudo -u "$ACTIVE_USER" \
+        DISPLAY=:0 \
+        WAYLAND_DISPLAY=wayland-0 \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$USER_ID/bus" \
+        /usr/bin/touch-grass-sim >/dev/null 2>&1 &
+fi
 
 exit 0
