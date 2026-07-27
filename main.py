@@ -21,7 +21,7 @@ def show_grass_overlay():
 
     label = tk.Label(
         root, 
-        text="Time to Touch Grass!\n\nTake a deep breath and step away for a moment.",
+        text="🌱 Time to Touch Grass! 🌱\n\nTake a deep breath and step away for a moment.",
         font=("Helvetica", 24, "bold"),
         fg="white",
         bg="#2E7D32",
@@ -82,7 +82,7 @@ def run_first_time_wizard():
     canvas.create_rectangle(0, 100, 600, 160, fill="#4CAF50", outline="")
     canvas.create_text(
         300, 60, 
-        text="Touch Grass SIM", 
+        text="🌱 Touch Grass SIM", 
         font=("Helvetica", 22, "bold"), 
         fill="white"
     )
