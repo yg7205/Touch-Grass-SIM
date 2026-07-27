@@ -1,42 +1,24 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
-# 1. Register GNOME Ctrl+Alt+G hotkey globally for all desktop users
-REG_SCRIPT="/usr/bin/touch-grass-sim-hotkey-setup"
-cat << 'EOF' > "$REG_SCRIPT"
-#!/bin/bash
-if command -v gsettings >/dev/null 2>&1; then
-    BIND_PATH="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/"
-    gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$BIND_PATH']" 2>/dev/null || true
-    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$BIND_PATH name 'Touch Grass SIM Break' 2>/dev/null || true
-    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$BIND_PATH command '/usr/bin/touch-grass-sim --trigger' 2>/dev/null || true
-    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$BIND_PATH binding '<Ctrl><Alt>g' 2>/dev/null || true
-fi
+# 1. Register global hotkey input permissions (Ctrl + Alt + G)
+echo 'KERNEL=="event*", NAME="input/%k", MODE="0644", TAG+="uaccess"' > /etc/udev/rules.d/99-touch-grass-sim.rules
+udevadm control --reload-rules || true
+udevadm trigger || true
+
+# 2. Place autostart trigger so GNOME spawns the wizard immediately for active users
+mkdir -p /etc/xdg/autostart
+cat << 'EOF' > /etc/xdg/autostart/touch-grass-sim-wizard.desktop
+[Desktop Entry]
+Type=Application
+Name=Touch Grass SIM Setup Wizard
+Exec=/usr/bin/touch-grass-sim
+Icon=preferences-system-time
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
 EOF
-chmod +x "$REG_SCRIPT"
 
-# 2. Detect the active desktop user logged into the GUI
-ACTIVE_USER=$(who | grep -E '\(:[0-9]\)|wayland' | awk '{print $1}' | head -n 1)
-
-if [ -z "$ACTIVE_USER" ]; then
-    # Fallback to SUDO_USER if running via GUI package manager
-    ACTIVE_USER="${SUDO_USER:-$LOGNAME}"
-fi
-
-# 3. If an active GUI session exists, spawn the Setup Wizard immediately
-if [ -n "$ACTIVE_USER" ] && [ "$ACTIVE_USER" != "root" ]; then
-    USER_ID=$(id -u "$ACTIVE_USER")
-    
-    # Run hotkey setup as the desktop user
-    sudo -u "$ACTIVE_USER" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$USER_ID/bus" "$REG_SCRIPT" || true
-
-    # Launch the Setup Wizard on the active desktop screen
-    nohup sudo -u "$ACTIVE_USER" \
-        DISPLAY=:0 \
-        WAYLAND_DISPLAY=wayland-0 \
-        XAUTHORITY="/home/$ACTIVE_USER/.Xauthority" \
-        DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$USER_ID/bus" \
-        /usr/bin/touch-grass-sim >/dev/null 2>&1 &
-fi
+chmod 644 /etc/xdg/autostart/touch-grass-sim-wizard.desktop
 
 exit 0

@@ -7,4 +7,3 @@ Icon=preferences-system-time
 Terminal=false
 Categories=Utility;Settings;
 StartupNotify=true
-X-GNOME-Autostart-enabled=true

@@ -1,6 +1,9 @@
 Package: touch-grass-sim
 Version: 1.0.0
 Architecture: amd64
-Maintainer: yg7205
-Depends: zenity, xxd
-Description: Anti-doomscroll break timer with automated setup wizard.
+Maintainer: Touch Grass SIM Team <support@touchgrass.sim>
+Depends: python3, python3-tk, python3-pip, libcanberra-gtk3-module
+Section: utils
+Priority: optional
+Description: Digital Wellness and Mindful Break Scheduler
+ A mindful break enforcement tool featuring interactive wizard setup and system break overlays.
