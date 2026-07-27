@@ -1,0 +1,6 @@
+Package: touch-grass-sim
+Version: 1.0.0
+Architecture: amd64
+Maintainer: yg7205
+Depends: zenity, xxd
+Description: Anti-doomscroll break timer with automated setup wizard.

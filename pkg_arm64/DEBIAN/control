@@ -1,0 +1,5 @@
+Package: touch-grass-sim
+Version: 1.0.0
+Architecture: arm64
+Maintainer: yg7205
+Description: Touch Grass SIM anti-doomscroll break timer.

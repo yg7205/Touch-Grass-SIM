@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+
+# 1. Grant input permissions for global hotkeys (Ctrl + Alt + G)
+echo 'KERNEL=="event*", NAME="input/%k", MODE="0644", TAG+="uaccess"' > /etc/udev/rules.d/99-touch-grass-sim.rules
+udevadm control --reload-rules || true
+udevadm trigger || true
+
+# 2. Auto-launch wizard for the logged-in user after installation completes
+if [ -n "$SUDO_USER" ]; then
+    USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+    export DISPLAY=:0
+    export XAUTHORITY="$USER_HOME/.Xauthority"
+    su - "$SUDO_USER" -c "DISPLAY=:0 /usr/bin/touch-grass-sim &" || true
+fi
+
+exit 0
