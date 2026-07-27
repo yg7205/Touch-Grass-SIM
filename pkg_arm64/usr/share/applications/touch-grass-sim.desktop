@@ -7,5 +7,4 @@ Icon=preferences-system-time
 Terminal=false
 Categories=Utility;Settings;
 StartupNotify=true
-MimeType=application/x-deb;application/x-debian-package;
-Keywords=mindfulness;break;timer;grass;
+X-GNOME-Autostart-enabled=true
