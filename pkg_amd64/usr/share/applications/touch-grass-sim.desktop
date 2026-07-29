@@ -2,9 +2,9 @@
 Type=Application
 Name=Touch Grass SIM
 Comment=Digital Wellness and Mindful Break Scheduler
-Exec=env DISPLAY=:0 /usr/bin/touch-grass-sim
-Icon=preferences-desktop-wallpaper
+Exec=/usr/bin/touch-grass-sim
+Icon=touch-grass-sim
 Terminal=false
 Categories=Utility;Settings;
-StartupNotify=true
+StartupNotify=false
 X-GNOME-Autostart-enabled=true
