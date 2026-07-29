@@ -7,24 +7,24 @@ on:
 
 jobs:
   build:
-    name: Build Multi-Platform Packages
+    name: Build Packages
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
-            platform: linux-amd64
+            arch: amd64
             pkg_dir: pkg_amd64
             target_deb: touch-grass-sim_1.0.0_amd64.deb
           - os: ubuntu-latest
-            platform: linux-arm64
+            arch: arm64
             pkg_dir: pkg_arm64
             target_deb: touch-grass-sim_1.0.0_arm64.deb
           - os: windows-latest
-            platform: windows-amd64
+            arch: x64
           - os: macos-latest
-            platform: macos-universal
+            arch: universal
 
     steps:
       - name: Checkout Code
@@ -35,55 +35,56 @@ jobs:
         with:
           python-version: '3.11'
 
-      # --- LINUX BUILD (.deb packages) ---
+      # Linux Debian Package Build
       - name: Build Debian Package (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y dpkg-dev
           chmod +x ${{ matrix.pkg_dir }}/DEBIAN/postinst || true
+          printf "\n" >> ${{ matrix.pkg_dir }}/DEBIAN/control
           dpkg-deb --build ${{ matrix.pkg_dir }} ${{ matrix.target_deb }}
 
-      # --- WINDOWS BUILD (.exe) ---
-      - name: Build Windows Executable
+      # Windows Executable Build
+      - name: Build Windows Binary
         if: runner.os == 'Windows'
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller pynput
+          pip install pyinstaller pynput Pillow
           pyinstaller --noconfirm --onefile --windowed --name "Touch-Grass-Sim-Installer" main.py
 
-      # --- MACOS BUILD (.app bundle) ---
+      # macOS App Bundle Build
       - name: Build macOS Application
         if: runner.os == 'macOS'
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller pynput
+          pip install pyinstaller pynput Pillow
           pyinstaller --noconfirm --windowed --name "Touch-Grass-Sim" main.py
 
-      # --- UPLOAD ARTIFACTS ---
+      # Upload Build Artifacts
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: assets-${{ matrix.platform }}
+          name: build-assets-${{ matrix.arch }}-${{ runner.os }}
           path: |
             *.deb
             dist/*.exe
             dist/*.app
 
   release:
-    name: Publish Release Assets
+    name: Publish Release
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Download All Artifacts
+      - name: Download Artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-assets
           merge-multiple: true
 
-      - name: Publish to GitHub Release
+      - name: Publish Release Assets
         uses: softprops/action-gh-release@v2
         with:
           files: release-assets/*

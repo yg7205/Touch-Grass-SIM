@@ -10,7 +10,7 @@ import subprocess
 import traceback
 
 import tkinter as tk
-from tkinter.scrolledtext import ScrolledText
+from tkinter import ScrolledText
 
 CONFIG_DIR = os.path.expanduser("~/.config/touch-grass-sim")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
@@ -33,72 +33,65 @@ def ensure_display_env():
 ensure_display_env()
 
 # ==========================================
-# GHIBLI MOUNTAIN VISTA DRAWING HELPER
+# 1. ANIME SUNRISE MOUNTAIN VISTA (WIZARD HEADER)
 # ==========================================
 
-def draw_mountain_meadow_canvas(canvas, width, height, title_text="🌱 Touch Grass SIM Setup", subtitle_text="Digital Wellness & Mindful Break Scheduler"):
-    """Renders the sunrise mountain vista aesthetic on any Tkinter canvas."""
+def draw_mountain_meadow_canvas(canvas, width, height, title_text="Touch Grass SIM Setup", subtitle_text="Digital Wellness & Mindful Break Scheduler"):
     canvas.delete("all")
     
-    # 1. Sunrise Sky Gradient (Warm pastel orange to soft blue)
-    canvas.create_rectangle(0, 0, width, height, fill="#FCEADE", outline="")
-    canvas.create_rectangle(0, 0, width, height * 0.4, fill="#D0E3F7", outline="")
+    # Sky Gradient
+    canvas.create_rectangle(0, 0, width, height * 0.45, fill="#D0E3F7", outline="")
+    canvas.create_rectangle(0, height * 0.2, width, height * 0.45, fill="#FCEADE", outline="")
 
-    # 2. Rising Sun & Rays
-    sun_x, sun_y = width * 0.65, height * 0.35
-    canvas.create_oval(sun_x - 30, sun_y - 30, sun_x + 30, sun_y + 30, fill="#FFF3B0", outline="")
-    canvas.create_oval(sun_x - 18, sun_y - 18, sun_x + 18, sun_y + 18, fill="#FFFFFF", outline="")
+    # Sun
+    sun_x, sun_y = width * 0.65, height * 0.25
+    canvas.create_oval(sun_x - 22, sun_y - 22, sun_x + 22, sun_y + 22, fill="#FFF3B0", outline="")
+    canvas.create_oval(sun_x - 12, sun_y - 12, sun_x + 12, sun_y + 12, fill="#FFFFFF", outline="")
 
-    # 3. Distant Snowy Mountain Range
+    # Mountain Ranges
     mountains = [
-        [0, height * 0.5, width * 0.25, height * 0.15, width * 0.45, height * 0.5],
-        [width * 0.2, height * 0.5, width * 0.55, height * 0.1, width * 0.8, height * 0.5],
-        [width * 0.6, height * 0.5, width * 0.85, height * 0.18, width, height * 0.5]
+        [0, height * 0.5, width * 0.25, height * 0.12, width * 0.45, height * 0.5],
+        [width * 0.2, height * 0.5, width * 0.55, height * 0.08, width * 0.8, height * 0.5],
+        [width * 0.6, height * 0.5, width * 0.85, height * 0.15, width, height * 0.5]
     ]
     for pts in mountains:
         canvas.create_polygon(pts, fill="#8E9AAF", outline="")
-        # Snow caps
-        snow_pts = [pts[2] - 25, pts[3] + 25, pts[2], pts[3], pts[2] + 25, pts[3] + 25]
+        snow_pts = [pts[2] - 20, pts[3] + 20, pts[2], pts[3], pts[2] + 20, pts[3] + 20]
         canvas.create_polygon(snow_pts, fill="#F8F9FA", outline="")
 
-    # 4. Layered Pine Tree Silhouettes & Fog
-    canvas.create_rectangle(0, height * 0.42, width, height * 0.52, fill="#E2ECE9", outline="") # Fog
-    for tx in range(0, int(width), 12):
-        th = random.randint(15, 30)
-        canvas.create_polygon([tx, height * 0.52, tx + 6, height * 0.52 - th, tx + 12, height * 0.52], fill="#2D4A3E", outline="")
+    # Pine Trees
+    canvas.create_rectangle(0, height * 0.38, width, height * 0.5, fill="#E2ECE9", outline="")
+    for tx in range(0, int(width), 10):
+        th = random.randint(12, 25)
+        canvas.create_polygon([tx, height * 0.5, tx + 5, height * 0.5 - th, tx + 10, height * 0.5], fill="#2D4A3E", outline="")
 
-    # 5. Rolling Wildflower Hills & Winding River
-    canvas.create_oval(-width * 0.1, height * 0.48, width * 0.9, height * 1.3, fill="#95D5B2", outline="")
-    canvas.create_oval(width * 0.1, height * 0.52, width * 1.2, height * 1.4, fill="#74C69D", outline="")
+    # Hills
+    canvas.create_oval(-width * 0.1, height * 0.45, width * 0.9, height * 1.3, fill="#95D5B2", outline="")
+    canvas.create_oval(width * 0.1, height * 0.5, width * 1.2, height * 1.4, fill="#74C69D", outline="")
 
-    # River
-    river_pts = [sun_x, height * 0.42, width * 0.55, height * 0.6, width * 0.45, height * 0.8, width * 0.3, height]
-    canvas.create_line(river_pts, fill="#A2D2FF", width=12, smooth=True)
-
-    # 6. Lupines & Foreground Wildflowers
-    flower_colors = ["#7209B7", "#4361EE", "#F72585", "#FFB703", "#FFFFFF", "#E63946"]
-    for _ in range(80):
+    # Scattered Flowers
+    flower_colors = ["#7209B7", "#4361EE", "#F72585", "#FFB703", "#FFFFFF"]
+    for _ in range(60):
         fx = random.randint(0, int(width))
-        fy = random.randint(int(height * 0.65), int(height))
+        fy = random.randint(int(height * 0.58), int(height))
         fc = random.choice(flower_colors)
-        if fc in ["#7209B7", "#4361EE"]:  # Tall Lupines
-            canvas.create_line(fx, fy, fx, fy - 14, fill="#2D6A4F", width=2)
-            canvas.create_oval(fx - 3, fy - 18, fx + 3, fy - 8, fill=fc, outline="")
+        if fc in ["#7209B7", "#4361EE"]:
+            canvas.create_line(fx, fy, fx, fy - 10, fill="#2D6A4F", width=2)
+            canvas.create_oval(fx - 2, fy - 14, fx + 2, fy - 6, fill=fc, outline="")
         else:
-            canvas.create_oval(fx - 3, fy - 3, fx + 3, fy + 3, fill=fc, outline="")
+            canvas.create_oval(fx - 2, fy - 2, fx + 2, fy + 2, fill=fc, outline="")
 
-    # Title & Subtitle Overlay
-    canvas.create_text(width / 2 + 1, height * 0.35 + 1, text=title_text, font=("Helvetica", 20, "bold"), fill="#1A251C")
-    canvas.create_text(width / 2, height * 0.35, text=title_text, font=("Helvetica", 20, "bold"), fill="#FFFFFF")
-    canvas.create_text(width / 2, height * 0.68, text=subtitle_text, font=("Helvetica", 10, "bold"), fill="#1B4332")
+    if title_text:
+        canvas.create_text(width / 2, height * 0.32, text=title_text, font=("Helvetica", 16, "bold"), fill="#1A251C")
+        canvas.create_text(width / 2, height * 0.62, text=subtitle_text, font=("Helvetica", 9, "bold"), fill="#1B4332")
 
 # ==========================================
-# GHIBLI-STYLE MEADOW & BREAK OVERLAY
+# 2. GHIBLI ANIMATED MEADOW OVERLAY
 # ==========================================
 
 class GrassMeadowOverlay:
     def __init__(self, lock_time_sec=300):
-        log_msg("Initializing Sunrise Mountain Meadow Overlay...")
+        log_msg("Spawning Ghibli Break Overlay...")
         self.lock_time = lock_time_sec
         self.remaining_time = lock_time_sec
         self.wind_angle = 0.0
@@ -107,7 +100,7 @@ class GrassMeadowOverlay:
         self.root.attributes('-fullscreen', True)
         self.root.attributes('-topmost', True)
         self.root.configure(bg="#DCEBFA")
-        
+
         self.root.protocol("WM_DELETE_WINDOW", lambda: None)
         self.root.bind("<Escape>", lambda e: "break")
 
@@ -120,52 +113,42 @@ class GrassMeadowOverlay:
         self.blades = []
         num_blades = int(self.width / 3.5)
         palette = ["#2D5A27", "#4D8B43", "#6DA04B", "#87C059", "#A3D977", "#3B7A32"]
-        
-        for i in range(num_blades):
-            x = random.randint(-20, self.width + 20)
-            base_y = self.height + random.randint(0, 30)
-            length = random.randint(140, 280)
-            stiffness = random.uniform(0.5, 1.3)
-            color = random.choice(palette)
+        for _ in range(num_blades):
             self.blades.append({
-                "x": x, "y": base_y, "length": length,
-                "stiffness": stiffness, "color": color,
+                "x": random.randint(-20, self.width + 20),
+                "y": self.height + random.randint(0, 30),
+                "length": random.randint(140, 280),
+                "stiffness": random.uniform(0.5, 1.3),
+                "color": random.choice(palette),
                 "offset": random.uniform(0, math.pi * 2)
             })
 
         self.flowers = []
         flower_colors = ["#7209B7", "#4361EE", "#F72585", "#FFB703", "#FFFFFF", "#E63946"]
         for _ in range(90):
-            fx = random.randint(30, self.width - 30)
-            fy = random.randint(int(self.height * 0.62), self.height - 10)
-            f_color = random.choice(flower_colors)
-            f_size = random.randint(4, 8)
-            self.flowers.append({"x": fx, "y": fy, "color": f_color, "size": f_size})
-
-        self.butterflies = []
-        for _ in range(5):
-            self.butterflies.append({
-                "x": random.randint(100, self.width - 100),
-                "y": random.randint(int(self.height * 0.3), int(self.height * 0.6)),
-                "dx": random.uniform(-1.5, 1.5),
-                "dy": random.uniform(-0.8, 0.8),
-                "wing_state": 0.0,
-                "color": random.choice(["#FFB703", "#219EBC", "#FB8500", "#F72585"])
+            self.flowers.append({
+                "x": random.randint(30, self.width - 30),
+                "y": random.randint(int(self.height * 0.62), self.height - 10),
+                "color": random.choice(flower_colors),
+                "size": random.randint(4, 8)
             })
 
         self.title_text = self.canvas.create_text(
             self.width / 2, self.height * 0.22,
-            text="🌱 Touch Grass SIM", font=("Helvetica", 42, "bold"), fill="#1D3557"
+            text="Touch Grass SIM", font=("Helvetica", 38, "bold"), fill="#1D3557"
         )
         self.timer_text = self.canvas.create_text(
-            self.width / 2, self.height * 0.22 + 60,
-            text="Take a deep breath and step away. Screen lock active...",
-            font=("Helvetica", 18), fill="#457B9D"
+            self.width / 2, self.height * 0.22 + 50,
+            text="Take a deep breath and step away. Break active...",
+            font=("Helvetica", 16), fill="#457B9D"
         )
 
         self.close_btn_window = None
         self.animate_frame()
         self.update_timer()
+
+        self.root.lift()
+        self.root.focus_force()
         self.root.mainloop()
 
     def animate_frame(self):
@@ -173,10 +156,8 @@ class GrassMeadowOverlay:
         self.wind_angle += 0.04
         wind_force = math.sin(self.wind_angle) * 30
 
-        # Mountain and Meadow Background
         draw_mountain_meadow_canvas(self.canvas, self.width, self.height, title_text="", subtitle_text="")
 
-        # Swaying Grass Blades
         for b in self.blades:
             sway = math.sin(self.wind_angle * b["stiffness"] + b["offset"]) * wind_force
             tip_x = b["x"] + sway
@@ -189,31 +170,17 @@ class GrassMeadowOverlay:
                 fill=b["color"], width=3, smooth=True, tags="dynamic"
             )
 
-        # Flowers
         for f in self.flowers:
-            if f["color"] in ["#7209B7", "#4361EE"]: # Tall Lupines
+            if f["color"] in ["#7209B7", "#4361EE"]:
                 self.canvas.create_line(f["x"], f["y"], f["x"], f["y"] - 18, fill="#2D6A4F", width=3, tags="dynamic")
                 self.canvas.create_oval(f["x"] - 4, f["y"] - 22, f["x"] + 4, f["y"] - 8, fill=f["color"], outline="", tags="dynamic")
             else:
                 self.canvas.create_oval(f["x"] - f["size"], f["y"] - f["size"], f["x"] + f["size"], f["y"] + f["size"], fill=f["color"], outline="", tags="dynamic")
-                self.canvas.create_oval(f["x"] - 2, f["y"] - 2, f["x"] + 2, f["y"] + 2, fill="#FFD166", outline="", tags="dynamic")
-
-        # Butterflies
-        for b in self.butterflies:
-            b["x"] += b["dx"]
-            b["y"] += b["dy"]
-            b["wing_state"] += 0.3
-
-            if b["x"] < 50 or b["x"] > self.width - 50: b["dx"] *= -1
-            if b["y"] < int(self.height * 0.2) or b["y"] > int(self.height * 0.7): b["dy"] *= -1
-
-            wing_span = math.abs(math.sin(b["wing_state"])) * 8 + 2
-            self.canvas.create_oval(b["x"] - wing_span, b["y"] - 6, b["x"], b["y"] + 6, fill=b["color"], outline="", tags="dynamic")
-            self.canvas.create_oval(b["x"], b["y"] - 6, b["x"] + wing_span, b["y"] + 6, fill=b["color"], outline="", tags="dynamic")
 
         self.canvas.tag_raise(self.title_text)
         self.canvas.tag_raise(self.timer_text)
-        if self.close_btn_window: self.canvas.tag_raise(self.close_btn_window)
+        if self.close_btn_window:
+            self.canvas.tag_raise(self.close_btn_window)
 
         self.root.after(35, self.animate_frame)
 
@@ -224,7 +191,7 @@ class GrassMeadowOverlay:
             self.remaining_time -= 1
             self.root.after(1000, self.update_timer)
         else:
-            self.canvas.itemconfig(self.timer_text, text="🌱 Break Complete! You may now return to your desktop.")
+            self.canvas.itemconfig(self.timer_text, text="Break Complete! You may now return to your desktop.")
             self.show_close_button()
 
     def show_close_button(self):
@@ -232,9 +199,9 @@ class GrassMeadowOverlay:
             self.root, text="Return to Desktop", font=("Helvetica", 14, "bold"),
             command=self.root.destroy, bg="#2D6A4F", fg="white",
             activebackground="#1B4332", activeforeground="white",
-            padx=25, pady=12, relief="flat", cursor="hand2"
+            padx=25, pady=10, relief="flat", cursor="hand2"
         )
-        self.close_btn_window = self.canvas.create_window(self.width / 2, self.height * 0.22 + 130, window=btn)
+        self.close_btn_window = self.canvas.create_window(self.width / 2, self.height * 0.22 + 120, window=btn)
 
 def launch_overlay():
     try:
@@ -243,7 +210,7 @@ def launch_overlay():
         log_msg(f"Overlay crash: {e}\n{traceback.format_exc()}")
 
 # ==========================================
-# WIZARD INSTALLER WITH MOUNTAIN CANVAS & FORMAL EULA
+# 3. WIZARD INSTALLER WITH EULA
 # ==========================================
 
 def run_background_system_setup(auth_key):
@@ -258,15 +225,15 @@ def run_background_system_setup(auth_key):
 
 def run_first_time_wizard():
     if os.path.exists(CONFIG_PATH):
-        log_msg("Config already present. Skipping setup wizard.")
+        log_msg("Config present. Skipping setup wizard.")
         return True
 
-    log_msg("Displaying Mountain Meadow Setup Wizard...")
+    log_msg("Displaying Setup Wizard...")
     wizard_completed = False
 
     try:
         root = tk.Tk()
-        root.title("Touch Grass SIM — Installation & Setup Wizard")
+        root.title("Touch Grass SIM — Setup Wizard")
         root.geometry("640x560")
         root.resizable(False, False)
 
@@ -277,7 +244,6 @@ def run_first_time_wizard():
             wizard_completed = True
             root.destroy()
 
-        # Canvas Header with Sunrise Mountain Artwork
         header_canvas = tk.Canvas(root, height=160, bg="#DCEBFA", highlightthickness=0)
         header_canvas.pack(fill="x", side="top")
         draw_mountain_meadow_canvas(header_canvas, 640, 160)
@@ -294,7 +260,7 @@ def run_first_time_wizard():
             "TOUCH GRASS SIM — END-USER LICENSE AGREEMENT & TERMS OF SERVICE\n\n"
             "1. PURPOSE & DIGITAL WELLNESS SERVICE\n"
             "Touch Grass SIM is designed to promote physical breaks and digital health. By installing "
-            "this application, you authorize Touch Grass SIM to run a local background daemon process "
+            "this application, you authorize Touch Grass SIM to run a local background process "
             "to schedule and trigger mandatory mindfulness sessions.\n\n"
             "2. SYSTEM LOCK ENFORCEMENT & MANDATORY BREAKS\n"
             "During an active break session (every 4 hours or manually via Ctrl+Alt+G), the app will render "
@@ -341,6 +307,9 @@ def run_first_time_wizard():
         ).pack(anchor="w", pady=(0, 8))
         
         install_btn.pack(fill="x")
+        
+        root.lift()
+        root.focus_force()
         root.mainloop()
 
         return wizard_completed
@@ -349,11 +318,10 @@ def run_first_time_wizard():
         return False
 
 # ==========================================
-# RELIABLE MULTI-BACKEND HOTKEY LISTENER
+# 4. HOTKEY & IPC LISTENERS
 # ==========================================
 
 def setup_global_hotkey():
-    """Hooks Ctrl + Alt + G using pynput with fallbacks for Wayland/X11."""
     def hotkey_loop():
         try:
             from pynput import keyboard
@@ -377,7 +345,7 @@ def setup_global_hotkey():
             with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
                 listener.join()
         except Exception as e:
-            log_msg(f"Hotkey listener warning: {e}")
+            log_msg(f"Hotkey listener error: {e}")
 
     threading.Thread(target=hotkey_loop, daemon=True).start()
 
@@ -392,7 +360,7 @@ def listen_for_ipc_triggers():
             conn, _ = server.accept()
             msg = conn.recv(1024).decode('utf-8')
             if msg == "TRIGGER":
-                log_msg("IPC trigger received. Launching overlay GUI...")
+                log_msg("IPC trigger received. Forcing overlay UI...")
                 threading.Thread(target=launch_overlay, daemon=True).start()
             conn.close()
     except Exception as e:
@@ -401,7 +369,7 @@ def listen_for_ipc_triggers():
 def try_notify_existing_instance():
     try:
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client.settimeout(0.5)
+        client.settimeout(1.0)
         client.connect(('127.0.0.1', SOCKET_PORT))
         client.sendall(b"TRIGGER")
         client.close()
@@ -413,23 +381,18 @@ def try_notify_existing_instance():
 if __name__ == "__main__":
     log_msg("Starting application launcher...")
 
-    # If already running, notify instance and show break overlay immediately
     if try_notify_existing_instance():
         sys.exit(0)
 
-    # Run setup wizard if config missing
     if not run_first_time_wizard():
         log_msg("Setup wizard canceled. Exiting.")
         sys.exit(0)
 
-    # Start IPC and Hotkey Listeners
     threading.Thread(target=listen_for_ipc_triggers, daemon=True).start()
     setup_global_hotkey()
 
-    # Launch initial session
     launch_overlay()
 
-    # Keep background daemon alive for hotkeys & 4-hour timers
     FOUR_HOURS = 4 * 60 * 60
     while True:
         time.sleep(FOUR_HOURS)

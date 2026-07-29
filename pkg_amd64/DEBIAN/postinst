@@ -1,33 +1,41 @@
 #!/bin/sh
 set -e
 
-# Fix global input rules for hotkeys
-echo 'KERNEL=="event*", NAME="input/%k", MODE="0644", TAG+="uaccess"' > /etc/udev/rules.d/99-touch-grass-sim.rules
+# 1. Update system icon cache so GNOME loads touch-grass-sim.png
+if [ -x "$(command -v gtk-update-icon-cache)" ]; then
+    gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
+fi
+
+# 2. Add udev rules for global pynput keyboard listeners
+echo 'KERNEL=="event*", NAME="input/%k", MODE="0666", TAG+="uaccess"' > /etc/udev/rules.d/99-touch-grass-sim.rules
 udevadm control --reload-rules || true
 udevadm trigger || true
 
-# Register global autostart so GNOME/KDE launches the wizard on desktop session load
+# 3. Register global autostart
 mkdir -p /etc/xdg/autostart
 cat << 'EOF' > /etc/xdg/autostart/touch-grass-sim.desktop
 [Desktop Entry]
 Type=Application
-Name=Touch Grass SIM Setup Wizard
+Name=Touch Grass SIM
 Exec=/usr/bin/touch-grass-sim
-Icon=preferences-system-time
+Icon=touch-grass-sim
 Terminal=false
 Categories=Utility;
 X-GNOME-Autostart-enabled=true
 EOF
-
 chmod 644 /etc/xdg/autostart/touch-grass-sim.desktop
 
-# Trigger the wizard for the current logged-in desktop user immediately
+# 4. Spawns setup wizard for active graphical user session
 ACTIVE_USER=$(who | grep -E '\(:[0-9]\)|wayland' | awk '{print $1}' | head -n 1)
+
 if [ -n "$ACTIVE_USER" ] && [ "$ACTIVE_USER" != "root" ]; then
     USER_ID=$(id -u "$ACTIVE_USER")
+    sudo -u "$ACTIVE_USER" xhost +local: >/dev/null 2>&1 || true
+
     nohup sudo -u "$ACTIVE_USER" \
         DISPLAY=:0 \
         WAYLAND_DISPLAY=wayland-0 \
+        XAUTHORITY="/home/$ACTIVE_USER/.Xauthority" \
         DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$USER_ID/bus" \
         /usr/bin/touch-grass-sim >/dev/null 2>&1 &
 fi
