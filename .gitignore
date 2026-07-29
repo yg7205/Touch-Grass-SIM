@@ -3,6 +3,7 @@ __pycache__/
 *.deb
 *.exe
 *.dmg
+*.png
 build/
 dist/
 *.spec
