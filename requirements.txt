@@ -1,5 +1,3 @@
-pynput
-plyer
-pywin32; sys_platform == 'win32'
-pyinstaller
-keyboard
+Pillow>=10.0.0
+pynput>=1.7.6
+pygame>=2.5.2

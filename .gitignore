@@ -1,10 +1,13 @@
-__pycache__/
-*.pyc
-*.deb
-*.exe
-*.dmg
-*.png
+# Build artifacts
 build/
 dist/
+pkg_amd64/
+pkg_arm64/
+*.deb
+*.zip
 *.spec
+__pycache__/
 state.json
+
+# Audio Assets
+wind.mp3
