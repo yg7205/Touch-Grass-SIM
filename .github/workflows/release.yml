@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 jobs:
   build:
@@ -13,16 +14,30 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # 1. Linux Debian AMD64
           - os: ubuntu-latest
             asset_type: deb
             arch: amd64
             pkg_dir: pkg_amd64
             output_name: touch-grass-sim_1.0.0_amd64.deb
+
+          # 2. Linux Debian ARM64
+          - os: ubuntu-latest
+            asset_type: deb
+            arch: arm64
+            pkg_dir: pkg_arm64
+            output_name: touch-grass-sim_1.0.0_arm64.deb
+
+          # 3. Windows x64 Executable
           - os: windows-latest
             asset_type: exe
+            arch: x64
             output_name: Touch-Grass-Sim-Windows-x64.zip
+
+          # 4. macOS Universal App Bundle
           - os: macos-latest
             asset_type: macos
+            arch: universal
             output_name: Touch-Grass-Sim-macOS.zip
 
     steps:
@@ -34,8 +49,8 @@ jobs:
         with:
           python-version: '3.11'
 
-      # --- LINUX DEBIAN BUILD ---
-      - name: Build Debian Package
+      # --- BUILD LINUX DEBIAN PACKAGES (AMD64 & ARM64) ---
+      - name: Build Debian Package (${{ matrix.arch }})
         if: matrix.asset_type == 'deb'
         run: |
           sudo apt-get update
@@ -48,42 +63,41 @@ jobs:
           mkdir -p ${{ matrix.pkg_dir }}/usr/share/touch-grass-sim/assets
           mkdir -p ${{ matrix.pkg_dir }}/usr/share/icons/hicolor/256x256/apps
           
-          # Force copy ALL PNGs
-          cp -f anime.png ${{ matrix.pkg_dir }}/usr/share/touch-grass-sim/assets/
-          cp -f ghibli.png ${{ matrix.pkg_dir }}/usr/share/touch-grass-sim/assets/
-          cp -f icon.png ${{ matrix.pkg_dir }}/usr/share/touch-grass-sim/assets/
-          cp -f icon.png ${{ matrix.pkg_dir }}/usr/share/icons/hicolor/256x256/apps/touch-grass-sim.png
+          cp -f anime.png ${{ matrix.pkg_dir }}/usr/share/touch-grass-sim/assets/ || true
+          cp -f ghibli.png ${{ matrix.pkg_dir }}/usr/share/touch-grass-sim/assets/ || true
+          cp -f icon.png ${{ matrix.pkg_dir }}/usr/share/touch-grass-sim/assets/ || true
+          cp -f icon.png ${{ matrix.pkg_dir }}/usr/share/icons/hicolor/256x256/apps/touch-grass-sim.png || true
 
-          chmod +x ${{ matrix.pkg_dir }}/DEBIAN/postinst || true
+          chmod 755 ${{ matrix.pkg_dir }}/DEBIAN/postinst || true
+          chmod 644 ${{ matrix.pkg_dir }}/DEBIAN/control
           dpkg-deb --build ${{ matrix.pkg_dir }} ${{ matrix.output_name }}
 
-      # --- WINDOWS EXE BUILD ---
+      # --- BUILD WINDOWS EXE ---
       - name: Build Windows Executable
         if: matrix.asset_type == 'exe'
+        shell: powershell
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller pynput Pillow
-          # Exe bundles all three images using add-data
           pyinstaller --noconfirm --onedir --windowed --add-data "anime.png;." --add-data "ghibli.png;." --add-data "icon.png;." --name "Touch-Grass-Sim" main.py
-          Compress-Archive -Path dist/Touch-Grass-Sim -DestinationPath dist/Touch-Grass-Sim-Windows-x64.zip
+          Compress-Archive -Path dist\Touch-Grass-Sim -DestinationPath Touch-Grass-Sim-Windows-x64.zip
 
-      # --- MACOS ZIP BUILD ---
+      # --- BUILD MACOS APP BUNDLE ---
       - name: Build macOS App Bundle
         if: matrix.asset_type == 'macos'
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller pynput Pillow
-          # Mac bundles all three images using add-data with a colon ':'
           pyinstaller --noconfirm --windowed --add-data "anime.png:." --add-data "ghibli.png:." --add-data "icon.png:." --name "Touch-Grass-Sim" main.py
           cd dist && zip -r ../Touch-Grass-Sim-macOS.zip Touch-Grass-Sim.app
 
+      # --- UPLOAD ARTIFACTS ---
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: asset-${{ matrix.os }}-${{ matrix.arch || 'sys' }}
+          name: asset-${{ matrix.os }}-${{ matrix.arch }}
           path: |
             *.deb
-            dist/*.zip
             *.zip
 
   release:
@@ -93,13 +107,13 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Download Artifacts
+      - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-files
           merge-multiple: true
 
-      - name: Publish Release
+      - name: Publish Release Assets to GitHub
         uses: softprops/action-gh-release@v2
         with:
           files: release-files/*
