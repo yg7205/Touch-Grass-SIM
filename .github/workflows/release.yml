@@ -25,7 +25,7 @@ jobs:
             output_name: touch-grass-sim_1.0.1_arm64.deb
           - os: windows-latest
             asset_type: exe
-            output_name: Touch-Grass-Sim-Windows-x64.zip
+            output_name: Touch-Grass-Sim-Windows-Setup.exe
           - os: macos-latest
             asset_type: macos
             output_name: Touch-Grass-Sim-macOS.zip
@@ -54,19 +54,24 @@ jobs:
           cp -f anime.png ${{ matrix.pkg_dir }}/usr/share/touch-grass-sim/assets/ 2>/dev/null || true
           cp -f ghibli.png ${{ matrix.pkg_dir }}/usr/share/touch-grass-sim/assets/ 2>/dev/null || true
           cp -f wind.mp3 ${{ matrix.pkg_dir }}/usr/share/touch-grass-sim/assets/ 2>/dev/null || true
+          cp -f icon.png ${{ matrix.pkg_dir }}/usr/share/touch-grass-sim/assets/ 2>/dev/null || true
 
           chmod +x ${{ matrix.pkg_dir }}/DEBIAN/postinst || true
+          chmod +x ${{ matrix.pkg_dir }}/DEBIAN/postrm || true
           printf "\n" >> ${{ matrix.pkg_dir }}/DEBIAN/control
           dpkg-deb --build ${{ matrix.pkg_dir }} ${{ matrix.output_name }}
 
-      # --- WINDOWS EXE BUILD ---
+      # --- WINDOWS EXE BUILD (WITH INNO SETUP INSTALLER) ---
       - name: Build Windows Executable
         if: matrix.asset_type == 'exe'
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller pynput Pillow pygame
-          pyinstaller --noconfirm --onedir --windowed --add-data "anime.png;." --add-data "ghibli.png;." --add-data "wind.mp3;." --name "Touch-Grass-Sim" main.py
-          Compress-Archive -Path dist/Touch-Grass-Sim -DestinationPath Touch-Grass-Sim-Windows-x64.zip
+          
+          pyinstaller --noconfirm --onedir --windowed --icon="icon.png" --add-data "anime.png;." --add-data "ghibli.png;." --add-data "wind.mp3;." --add-data "icon.png;." --name "Touch-Grass-Sim" main.py
+          
+          # Compile Inno Setup Script into a Windows Setup Executable
+          iscc installer.iss
 
       # --- MACOS ZIP BUILD ---
       - name: Build macOS App Bundle
@@ -74,8 +79,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller pynput Pillow pygame
-          pyinstaller --noconfirm --windowed --add-data "anime.png:." --add-data "ghibli.png:." --add-data "wind.mp3:." --name "Touch-Grass-Sim" main.py
-          cd dist && zip -r ../touch-grass-sim-macOS.zip Touch-Grass-Sim.app
+          pyinstaller --noconfirm --windowed --add-data "anime.png:." --add-data "ghibli.png:." --add-data "wind.mp3:." --add-data "icon.png:." --name "Touch-Grass-Sim" main.py
+          cd dist && zip -r ../Touch-Grass-Sim-macOS.zip Touch-Grass-Sim.app
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
@@ -83,7 +88,7 @@ jobs:
           name: asset-${{ matrix.os }}-${{ matrix.arch || 'sys' }}
           path: |
             *.deb
-            dist/*.zip
+            *.exe
             *.zip
 
   release:
