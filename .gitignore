@@ -8,6 +8,3 @@ pkg_arm64/
 *.spec
 __pycache__/
 state.json
-
-# Audio Assets
-wind.mp3
