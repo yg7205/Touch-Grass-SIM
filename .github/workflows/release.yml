@@ -66,7 +66,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyinstaller pynput Pillow pygame
           pyinstaller --noconfirm --onedir --windowed --add-data "anime.png;." --add-data "ghibli.png;." --add-data "wind.mp3;." --name "Touch-Grass-Sim" main.py
-          Compress-Archive -Path home/phoenix/touch-grass/dist/touch-grass-sim -DestinationPath home/phoenix/touch-grass/dist/touch-grass-sim-Windows-x64.zip
+          Compress-Archive -Path Touch-Grass-Sim-Windows-x64.zip
 
       # --- MACOS ZIP BUILD ---
       - name: Build macOS App Bundle
