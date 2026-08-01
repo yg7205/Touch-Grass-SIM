@@ -41,7 +41,7 @@ EVENT_QUEUE = queue.Queue()
 RUNNING_FLAG = threading.Event()
 RUNNING_FLAG.set()
 
-# FIX 1: Explicitly set Windows Taskbar AppUserModelID to prevent fallback to settings icon
+# Fix Taskbar Icon on Windows
 if sys.platform == "win32":
     try:
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("touchgrass.sim.app.1.0")
@@ -109,6 +109,7 @@ def run_first_time_wizard():
     root.resizable(False, False)
     set_window_icon(root)
 
+    # Load Wizard Banner image explicitly
     banner_path = get_asset_path("anime.png")
     if banner_path and PIL_AVAILABLE:
         try:
@@ -121,7 +122,7 @@ def run_first_time_wizard():
         except Exception as e:
             log_msg(f"Banner load failed: {e}")
 
-    frame = tk.Frame(root, bg="#1D2D44", padding=20) if hasattr(tk, 'padding') else tk.Frame(root, bg="#111827")
+    frame = tk.Frame(root, bg="#111827")
     frame.pack(fill="both", expand=True)
 
     tk.Label(frame, text="Welcome to Touch Grass SIM!", font=("Helvetica", 14, "bold"), fg="#95D5B2", bg="#111827").pack(anchor="w", padx=20, pady=(15, 5))
@@ -235,13 +236,12 @@ class AppManager:
             strip_h = grass_crop.height // num_strips
             self.grass_strips = []
 
-            # Slice grass strips from top to bottom
             for i in range(num_strips):
                 sy = i * strip_h
                 ey = (i + 1) * strip_h if i < num_strips - 1 else grass_crop.height
                 strip_tk = ImageTk.PhotoImage(grass_crop.crop((0, sy, self.width, ey)))
                 
-                # FIX 4: Height-anchored flexibility curve (Top of grass sways, roots stay grounded)
+                # Height-anchored flexibility: top sways, bottom stays grounded at 0
                 flexibility = ((num_strips - i) / float(num_strips)) ** 1.8
                 self.grass_strips.append((strip_tk, sy + sky_height, flexibility))
 
@@ -295,7 +295,6 @@ class AppManager:
             self.canvas.delete("all")
             t = time.time()
             
-            # FIX 4: Organic dual-frequency wind equation
             breeze = math.sin(t * 1.2) * 18.0
             gust = math.sin(t * 3.4) * 6.0
             total_wind = breeze + gust
@@ -333,7 +332,6 @@ def setup_global_hotkey():
     except Exception as e:
         log_msg(f"Hotkey setup failed: {e}")
 
-# FIX 3: Non-blocking IPC server so Python can exit cleanly on uninstall/close
 def listen_for_ipc_triggers():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -377,23 +375,33 @@ if __name__ == "__main__":
 
     ensure_display_env()
 
-    # Allow resetting config via CLI argument: python main.py --reset
+    # CLI Reset command: python main.py --reset
     if "--reset" in sys.argv:
         if os.path.exists(CONFIG_PATH):
             os.remove(CONFIG_PATH)
             log_msg("Configuration reset successfully.")
 
-    if try_notify_existing_instance():
+    # STEP A: Check Config FIRST
+    config = load_config()
+
+    # STEP B: If setup is NOT complete OR --wizard argument passed, FORCE WIZARD NOW
+    need_wizard = "--wizard" in sys.argv or not config.get("setup_complete")
+
+    if need_wizard:
+        log_msg("First-time setup required. Launching Wizard...")
+        success = run_first_time_wizard()
+        if not success:
+            log_msg("Wizard declined or closed. Exiting.")
+            sys.exit(0)
+        # Reload config after wizard completion
+        config = load_config()
+
+    # STEP C: Only check existing instance AFTER wizard is complete
+    if not need_wizard and try_notify_existing_instance():
         log_msg("Instance already running. Sent break signal to existing process.")
         sys.exit(0)
 
-    # FIX 2: Check config state explicitly before proceeding
-    config = load_config()
-    if not config.get("setup_complete"):
-        if not run_first_time_wizard():
-            log_msg("Wizard declined or closed. Exiting.")
-            sys.exit(0)
-
+    # STEP D: Start background threads and app overlay
     threading.Thread(target=listen_for_ipc_triggers, daemon=True).start()
     setup_global_hotkey()
 
