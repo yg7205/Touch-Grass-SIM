@@ -7,11 +7,8 @@ import time
 import math
 import json
 import socket
-import select
-import signal
 import threading
 import queue
-import ctypes
 import tkinter as tk
 from tkinter import ttk
 
@@ -38,15 +35,6 @@ CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
 IPC_PORT = 47382
 
 EVENT_QUEUE = queue.Queue()
-RUNNING_FLAG = threading.Event()
-RUNNING_FLAG.set()
-
-# Fix Taskbar Icon on Windows
-if sys.platform == "win32":
-    try:
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("touchgrass.sim.app.1.0")
-    except Exception:
-        pass
 
 def log_msg(msg):
     print(f"[Touch Grass SIM] {msg}")
@@ -76,13 +64,25 @@ def get_asset_path(filename):
     return None
 
 def set_window_icon(window):
+    """Sets the application icon for Windows, Linux, and macOS taskbars."""
+    try:
+        # LINUX FIX: Assign X11 WM_CLASS so GNOME/Wayland respects the icon
+        window.wm_class("touch-grass-sim", "Touch Grass SIM")
+    except Exception:
+        pass
+
     icon_path = get_asset_path("icon.png")
     if icon_path and PIL_AVAILABLE:
         try:
+            # WINDOWS FIX: Force Windows taskbar to drop the default Python gear
+            if sys.platform == "win32":
+                import ctypes
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("touchgrass.sim.app.1.0")
+            
             icon_img = Image.open(icon_path)
             icon_photo = ImageTk.PhotoImage(icon_img)
             window.iconphoto(True, icon_photo)
-            window._icon_photo = icon_photo
+            window._icon_photo = icon_photo  
         except Exception as e:
             log_msg(f"Icon load failed: {e}")
 
@@ -101,6 +101,10 @@ def save_config(data):
         json.dump(data, f, indent=2)
 
 def run_first_time_wizard():
+    config = load_config()
+    if config.get("setup_complete"):
+        return True
+
     wizard_success = [False]
 
     root = tk.Tk()
@@ -109,7 +113,6 @@ def run_first_time_wizard():
     root.resizable(False, False)
     set_window_icon(root)
 
-    # Load Wizard Banner image explicitly
     banner_path = get_asset_path("anime.png")
     if banner_path and PIL_AVAILABLE:
         try:
@@ -118,56 +121,54 @@ def run_first_time_wizard():
             banner_img_tk = ImageTk.PhotoImage(pil_banner)
             banner_label = tk.Label(root, image=banner_img_tk, bg="#1D2D44")
             banner_label.pack(fill="x")
-            banner_label._img = banner_img_tk
-        except Exception as e:
-            log_msg(f"Banner load failed: {e}")
+        except Exception:
+            banner_path = None
 
-    frame = tk.Frame(root, bg="#111827")
+    if not banner_path or not PIL_AVAILABLE:
+        canvas = tk.Canvas(root, width=540, height=180, bg="#1D2D44", highlightthickness=0)
+        canvas.pack(fill="x")
+        canvas.create_text(270, 90, text="TOUCH GRASS SIM", fill="#F4F1DE", font=("Helvetica", 22, "bold"))
+
+    frame = ttk.Frame(root, padding=20)
     frame.pack(fill="both", expand=True)
 
-    tk.Label(frame, text="Welcome to Touch Grass SIM!", font=("Helvetica", 14, "bold"), fg="#95D5B2", bg="#111827").pack(anchor="w", padx=20, pady=(15, 5))
-
+    ttk.Label(frame, text="Welcome to Touch Grass SIM!", font=("Helvetica", 14, "bold")).pack(anchor="w", pady=(0, 5))
+    
     desc_text = (
-        "Touch Grass SIM enforces mandatory digital wellness breaks.\n\n"
+        "Touch Grass SIM enforces 5-minute mandatory digital wellness breaks every 4 hours.\n\n"
         "Features:\n"
-        "• Height-anchored Studio Ghibli grass sway engine\n"
+        "• Animated Ghibli grass physics\n"
         "• Locked 300-second mindfulness break timer\n"
-        "• Global shortcut (Ctrl + Alt + G) for manual triggers\n"
+        "• Global shortcut (Ctrl + Alt + G) for early breaks\n"
         "• Environmental audio suppression\n"
     )
-    tk.Label(frame, text=desc_text, font=("Helvetica", 10), fg="#E5E7EB", bg="#111827", justify="left").pack(anchor="w", padx=20, pady=(0, 10))
+    ttk.Label(frame, text=desc_text, wraplength=480, justify="left").pack(anchor="w", pady=(0, 10))
 
-    eula_frame = tk.LabelFrame(frame, text=" Agreement ", font=("Helvetica", 9, "bold"), fg="#9CA3AF", bg="#111827", bd=1)
-    eula_frame.pack(fill="both", expand=True, padx=20, pady=(0, 10))
+    eula_frame = ttk.LabelFrame(frame, text="End User License Agreement", padding=10)
+    eula_frame.pack(fill="both", expand=True, pady=(0, 10))
 
-    eula_text = tk.Text(eula_frame, wrap="word", height=5, font=("Consolas", 9), bg="#1F2937", fg="#D1D5DB", bd=0)
-    eula_text.insert("1.0", "By continuing, you agree to allow background hotkey listeners, system audio muting, and periodic break overlays designed to prevent digital fatigue. All data remains 100% local.")
+    eula_text = tk.Text(eula_frame, wrap="word", height=6, font=("Consolas", 8))
+    eula_text.insert("1.0", "By using Touch Grass SIM, you agree to allow background hotkey listeners, system audio muting, and periodic break overlays designed to prevent digital fatigue. All data is processed entirely locally on your device.")
     eula_text.config(state="disabled")
-    eula_text.pack(fill="both", expand=True, padx=5, pady=5)
+    eula_text.pack(fill="both", expand=True)
 
     eula_var = tk.BooleanVar(value=False)
-
-    def on_checkbox():
-        if eula_var.get():
-            accept_btn.config(state="normal", bg="#10B981", fg="#FFFFFF")
-        else:
-            accept_btn.config(state="disabled", bg="#374151", fg="#9CA3AF")
-
-    chk = tk.Checkbutton(frame, text="I agree to touch grass.", variable=eula_var, command=on_checkbox, bg="#111827", fg="#F3F4F6", selectcolor="#1F2937", activebackground="#111827", activeforeground="#FFFFFF")
-    chk.pack(anchor="w", padx=20, pady=(0, 15))
-
-    btn_frame = tk.Frame(frame, bg="#111827")
-    btn_frame.pack(fill="x", padx=20, pady=(0, 15))
 
     def on_finish():
         save_config({"setup_complete": True, "eula_accepted": True})
         wizard_success[0] = True
         root.destroy()
 
-    accept_btn = tk.Button(btn_frame, text="Accept & Continue", state="disabled", bg="#374151", fg="#9CA3AF", font=("Helvetica", 10, "bold"), command=on_finish, relief="flat", padx=15, pady=6)
+    chk = tk.Checkbutton(frame, text="I agree to touch grass.", variable=eula_var, command=lambda: accept_btn.config(state=tk.NORMAL if eula_var.get() else tk.DISABLED))
+    chk.pack(anchor="w", pady=(0, 15))
+
+    btn_frame = tk.Frame(frame)
+    btn_frame.pack(fill="x")
+
+    accept_btn = tk.Button(btn_frame, text="Accept & Continue", state=tk.DISABLED, command=on_finish, width=16)
     accept_btn.pack(side="right", padx=5)
 
-    cancel_btn = tk.Button(btn_frame, text="Decline", command=root.destroy, bg="#EF4444", fg="#FFFFFF", font=("Helvetica", 10, "bold"), relief="flat", padx=15, pady=6)
+    cancel_btn = tk.Button(btn_frame, text="Decline", command=root.destroy, width=10)
     cancel_btn.pack(side="right", padx=5)
 
     root.mainloop()
@@ -204,57 +205,37 @@ class AppManager:
         tk.Label(self.ui_frame, textvariable=self.time_var, font=("Helvetica", 48, "bold"), fg="#FFFFFF", bg="#111827").pack(padx=30, pady=5)
         
         self.return_btn = tk.Button(
-            self.ui_frame, 
-            text="Return to Work (Locked)", 
-            state="disabled", 
-            font=("Helvetica", 12, "bold"), 
-            bg="#374151", 
-            fg="#9CA3AF", 
-            command=self.dismiss_overlay
+            self.ui_frame, text="Return to Work (Locked)", state="disabled", font=("Helvetica", 12, "bold"), bg="#374151", fg="#9CA3AF", command=self.dismiss_overlay
         )
         self.return_btn.pack(padx=30, pady=(10, 20))
 
-        self.root.withdraw()
         self.poll_queue()
         self.animate()
+        self.show_overlay()
 
     def init_ghibli_background(self):
+        # Using the smooth single-image method so there is no blocky tearing
         img_path = get_asset_path("ghibli.png")
-        if not img_path or not PIL_AVAILABLE:
-            return
+        if not img_path or not PIL_AVAILABLE: return
 
         try:
             raw_img = Image.open(img_path)
-            scaled_img = ImageOps.fit(raw_img, (self.width, self.height), Image.Resampling.LANCZOS)
+            # Make the image slightly wider so it can pan back and forth smoothly
+            scaled_img = ImageOps.fit(raw_img, (self.width + 100, self.height), Image.Resampling.LANCZOS)
             
-            sky_height = int(self.height * 0.55)
-            self.sky_tk = ImageTk.PhotoImage(scaled_img.crop((0, 0, self.width, sky_height)))
-
-            grass_crop = scaled_img.crop((0, sky_height, self.width, self.height))
+            self.sky_height = int(self.height * 0.60)
+            self.sky_tk = ImageTk.PhotoImage(scaled_img.crop((50, 0, self.width + 50, self.sky_height)))
+            self.grass_tk = ImageTk.PhotoImage(scaled_img.crop((0, self.sky_height, self.width + 100, self.height)))
             
-            num_strips = 32
-            strip_h = grass_crop.height // num_strips
-            self.grass_strips = []
-
-            for i in range(num_strips):
-                sy = i * strip_h
-                ey = (i + 1) * strip_h if i < num_strips - 1 else grass_crop.height
-                strip_tk = ImageTk.PhotoImage(grass_crop.crop((0, sy, self.width, ey)))
-                
-                # Height-anchored flexibility: top sways, bottom stays grounded at 0
-                flexibility = ((num_strips - i) / float(num_strips)) ** 1.8
-                self.grass_strips.append((strip_tk, sy + sky_height, flexibility))
-
             self.ghibli_data = True
         except Exception as e:
-            log_msg(f"Ghibli image processing failed: {e}")
+            log_msg(f"Failed to process ghibli.png: {e}")
 
     def format_time(self, seconds):
         return f"{seconds // 60:02d}:{seconds % 60:02d}"
 
     def show_overlay(self):
-        if self.is_active:
-            return
+        if self.is_active: return
         self.is_active = True
         self.remaining = self.duration
         self.start_time = time.time()
@@ -274,13 +255,11 @@ class AppManager:
     def dismiss_overlay(self):
         self.is_active = False
         self.root.withdraw()
-        
-        if AUDIO_AVAILABLE:
-            audio.stop_wind_audio()
+        if AUDIO_AVAILABLE: audio.stop_wind_audio()
+        self.root.after(14400000, self.show_overlay) 
 
     def update_timer(self):
-        if not self.is_active:
-            return
+        if not self.is_active: return
         elapsed = int(time.time() - self.start_time)
         self.remaining = max(0, self.duration - elapsed)
         self.time_var.set(self.format_time(self.remaining))
@@ -295,15 +274,13 @@ class AppManager:
             self.canvas.delete("all")
             t = time.time()
             
-            breeze = math.sin(t * 1.2) * 18.0
-            gust = math.sin(t * 3.4) * 6.0
-            total_wind = breeze + gust
-
             if self.ghibli_data:
+                # Sky stays anchored
                 self.canvas.create_image(0, 0, image=self.sky_tk, anchor="nw")
-                for strip_tk, y_pos, flexibility in self.grass_strips:
-                    x_offset = total_wind * flexibility
-                    self.canvas.create_image(x_offset, y_pos, image=strip_tk, anchor="nw")
+                
+                # Grass sways smoothly on a sine wave
+                sway = math.sin(t * 1.5) * 20
+                self.canvas.create_image(-50 + sway, self.sky_height, image=self.grass_tk, anchor="nw")
 
         self.root.after(33, self.animate)
 
@@ -313,6 +290,10 @@ class AppManager:
                 msg = EVENT_QUEUE.get_nowait()
                 if msg == "TRIGGER_BREAK":
                     self.show_overlay()
+                elif msg == "SHUTDOWN":
+                    # AUTO-ASSASSIN: Instantly terminates this process
+                    log_msg("Received shutdown order. Self-destructing.")
+                    os._exit(0)
         except queue.Empty:
             pass
         self.root.after(100, self.poll_queue)
@@ -321,16 +302,14 @@ class AppManager:
         self.root.mainloop()
 
 def setup_global_hotkey():
-    if not PYNPUT_AVAILABLE:
-        return
+    if not PYNPUT_AVAILABLE: return
     def on_activate():
         EVENT_QUEUE.put("TRIGGER_BREAK")
     try:
         hotkey = keyboard.GlobalHotKeys({'<ctrl>+<alt>+g': on_activate})
-        t = threading.Thread(target=hotkey.start, daemon=True)
-        t.start()
-    except Exception as e:
-        log_msg(f"Hotkey setup failed: {e}")
+        threading.Thread(target=hotkey.start, daemon=True).start()
+    except Exception:
+        pass
 
 def listen_for_ipc_triggers():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -338,72 +317,44 @@ def listen_for_ipc_triggers():
     try:
         server.bind(("127.0.0.1", IPC_PORT))
         server.listen(5)
-        server.settimeout(1.0)
-        
-        while RUNNING_FLAG.is_set():
-            try:
-                conn, _ = server.accept()
-                data = conn.recv(1024)
-                if b"TRIGGER_BREAK" in data:
-                    EVENT_QUEUE.put("TRIGGER_BREAK")
-                conn.close()
-            except socket.timeout:
-                continue
-    except Exception as e:
-        log_msg(f"IPC Server closed: {e}")
-    finally:
-        server.close()
+        while True:
+            conn, _ = server.accept()
+            data = conn.recv(1024)
+            if b"TRIGGER_BREAK" in data:
+                EVENT_QUEUE.put("TRIGGER_BREAK")
+            elif b"SHUTDOWN" in data:
+                EVENT_QUEUE.put("SHUTDOWN")
+            conn.close()
+    except Exception:
+        pass
 
-def try_notify_existing_instance():
+def kill_ghost_process():
+    """Connects to the IPC port and commands any old background instance to self-destruct instantly."""
     try:
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client.settimeout(0.8)
+        client.settimeout(0.5)
         client.connect(("127.0.0.1", IPC_PORT))
-        client.sendall(b"TRIGGER_BREAK\n")
+        client.sendall(b"SHUTDOWN\n")
         client.close()
-        return True
+        log_msg("Ghost process detected. Kill signal sent.")
+        time.sleep(1) # Give the OS exactly 1 second to release the port for the new instance
     except Exception:
-        return False
-
-def clean_exit_handler(signum, frame):
-    RUNNING_FLAG.clear()
-    sys.exit(0)
+        pass # No ghost process found, all clear
 
 if __name__ == "__main__":
-    signal.signal(signal.SIGINT, clean_exit_handler)
-    signal.signal(signal.SIGTERM, clean_exit_handler)
-
     ensure_display_env()
 
-    # CLI Reset command: python main.py --reset
-    if "--reset" in sys.argv:
-        if os.path.exists(CONFIG_PATH):
-            os.remove(CONFIG_PATH)
-            log_msg("Configuration reset successfully.")
+    # 1. THE AUTO-ASSASSIN: Clear out any stuck ghost processes first
+    kill_ghost_process()
 
-    # STEP A: Check Config FIRST
-    config = load_config()
-
-    # STEP B: If setup is NOT complete OR --wizard argument passed, FORCE WIZARD NOW
-    need_wizard = "--wizard" in sys.argv or not config.get("setup_complete")
-
-    if need_wizard:
-        log_msg("First-time setup required. Launching Wizard...")
-        success = run_first_time_wizard()
-        if not success:
-            log_msg("Wizard declined or closed. Exiting.")
-            sys.exit(0)
-        # Reload config after wizard completion
-        config = load_config()
-
-    # STEP C: Only check existing instance AFTER wizard is complete
-    if not need_wizard and try_notify_existing_instance():
-        log_msg("Instance already running. Sent break signal to existing process.")
+    # 2. RUN THE WIZARD: It will pop up properly now
+    if not run_first_time_wizard():
         sys.exit(0)
 
-    # STEP D: Start background threads and app overlay
+    # 3. START BACKGROUND SYSTEMS
     threading.Thread(target=listen_for_ipc_triggers, daemon=True).start()
     setup_global_hotkey()
 
+    # 4. START THE APP
     app = AppManager(duration_sec=300)
     app.run()
