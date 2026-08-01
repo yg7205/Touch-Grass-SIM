@@ -20,7 +20,14 @@ Name: "{autodesktop}\Touch Grass SIM"; Filename: "{app}\Touch-Grass-Sim.exe"
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   ConfigPath: String;
+  ResultCode: Integer;
 begin
+  if CurUninstallStep = usUninstall then
+  begin
+    // Kill running process before deleting files
+    Exec('taskkill.exe', '/F /IM Touch-Grass-Sim.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
+
   if CurUninstallStep = usPostUninstall then
   begin
     ConfigPath := ExpandConstant('{userdocs}\..\.config\touch-grass-sim');
