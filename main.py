@@ -272,5 +272,5 @@ if __name__ == "__main__":
     
     # AUTOMATIC LAUNCH: Forces the break screen to open immediately so you know it works.
     EVENT_QUEUE.put("TRIGGER")
-    
+
     app.root.mainloop()
