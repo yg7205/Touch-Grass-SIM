@@ -6,6 +6,7 @@ import math
 import json
 import socket
 import threading
+import queue
 import tkinter as tk
 
 try:
@@ -25,6 +26,7 @@ except ImportError:
 
 CONFIG_PATH = os.path.expanduser("~/.config/touch-grass-sim/config.json")
 IPC_PORT = 47382
+EVENT_QUEUE = queue.Queue()
 
 # --- UNINSTALLER: ORPHAN FILE CLEANUP ---
 if "--uninstall" in sys.argv:
@@ -32,22 +34,52 @@ if "--uninstall" in sys.argv:
         os.remove(CONFIG_PATH)
     sys.exit(0)
 
+# --- FORCE WIZARD TO LOAD ---
+# This wipes out any old test configurations so the wizard is forced to show.
+if os.path.exists(CONFIG_PATH):
+    try: 
+        os.remove(CONFIG_PATH)
+    except Exception: 
+        pass
+
 def get_asset_path(filename):
     return os.path.join(os.path.dirname(__file__), "assets", filename)
 
-def run_wizard():
-    if os.path.exists(CONFIG_PATH):
-        return True
+def set_window_icon(window):
+    # 1. LINUX LOGO FIX
+    try: 
+        window.wm_class("touch-grass-sim", "Touch Grass SIM")
+    except Exception: 
+        pass
+    
+    # 2. WINDOWS LOGO FIX
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("touchgrass.sim.app.1.0")
+        except Exception: 
+            pass
+            
+    # 3. APPLY ICON
+    try:
+        icon_img = ImageTk.PhotoImage(Image.open(get_asset_path("icon.png")))
+        window.iconphoto(True, icon_img)
+        window._icon_photo = icon_img
+    except Exception: 
+        pass
 
+def run_wizard():
     root = tk.Tk()
     root.title("Touch Grass SIM Setup")
     root.geometry("540x600")
     root.configure(bg="#2D3748")
+    
+    # Apply the logo fix to the wizard
+    set_window_icon(root)
 
     canvas = tk.Canvas(root, width=540, height=180, bg="#1D2D44", highlightthickness=0)
     canvas.pack(fill="x")
     
-    # Wizard banner using anime.png
     try:
         pil_banner = Image.open(get_asset_path("anime.png"))
         pil_banner = ImageOps.fit(pil_banner, (540, 180), Image.Resampling.LANCZOS)
@@ -57,7 +89,6 @@ def run_wizard():
     except Exception:
         canvas.create_text(270, 90, text="TOUCH GRASS SIM", fill="#F4F1DE", font=("Helvetica", 22, "bold"))
     
-    # Fix: Buttons are explicitly colored so they are never blank
     btn_frame = tk.Frame(root, bg="#2D3748")
     btn_frame.pack(side="bottom", pady=40)
     
@@ -73,51 +104,69 @@ def run_wizard():
     root.mainloop()
     return os.path.exists(CONFIG_PATH)
 
-def trigger_break():
-    # Fix: Cut off external sound and play wind.mp3
-    try:
-        audio.mute_system_audio()
-        audio.start_wind_audio(get_asset_path("wind.mp3"))
-    except Exception:
-        pass
+class AppManager:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.withdraw() # Hide the background engine window
+        self.overlay = None
+        self.check_queue()
 
-    overlay = tk.Tk()
-    overlay.attributes("-fullscreen", True)
-    overlay.attributes("-topmost", True)
-    
-    canvas = tk.Canvas(overlay, bg="#0B132B", highlightthickness=0)
-    canvas.pack(fill="both", expand=True)
-
-    try:
-        sky_img = ImageTk.PhotoImage(Image.open(get_asset_path("sky.png")))
-        grass_img = ImageTk.PhotoImage(Image.open(get_asset_path("ghibli.png")))
-        
-        def animate():
-            if not overlay.winfo_exists():
-                return
-            canvas.delete("all")
-            canvas.create_image(0, 0, image=sky_img, anchor="nw")
-            # Fix: Natural grass swaying using smooth math.sin
-            sway = math.sin(time.time() * 1.5) * 20
-            canvas.create_image(-50 + sway, 500, image=grass_img, anchor="nw")
-            overlay.after(33, animate)
-        animate()
-    except Exception:
-        pass
-
-    def on_close():
+    def check_queue(self):
         try:
-            audio.stop_wind_audio()
-            audio.unmute_system_audio()
-        except Exception:
+            while True:
+                msg = EVENT_QUEUE.get_nowait()
+                if msg == "TRIGGER" and self.overlay is None:
+                    self.show_overlay()
+        except queue.Empty:
             pass
-        overlay.destroy()
+        self.root.after(100, self.check_queue)
+
+    def show_overlay(self):
+        try:
+            audio.mute_system_audio()
+            audio.start_wind_audio(get_asset_path("wind.mp3"))
+        except Exception: 
+            pass
+
+        self.overlay = tk.Toplevel(self.root)
+        self.overlay.attributes("-fullscreen", True)
+        self.overlay.attributes("-topmost", True)
+        self.overlay.configure(bg="#0B132B")
         
-    tk.Button(overlay, text="Return to Work", command=on_close, bg="#48BB78", fg="black", font=("Helvetica", 14, "bold")).place(relx=0.5, rely=0.5, anchor="center")
-    overlay.mainloop()
+        # Apply the logo fix to the break screen
+        set_window_icon(self.overlay)
+
+        canvas = tk.Canvas(self.overlay, bg="#0B132B", highlightthickness=0)
+        canvas.pack(fill="both", expand=True)
+
+        try:
+            self.sky_img = ImageTk.PhotoImage(Image.open(get_asset_path("sky.png")))
+            self.grass_img = ImageTk.PhotoImage(Image.open(get_asset_path("ghibli.png")))
+            
+            def animate():
+                if not self.overlay or not self.overlay.winfo_exists(): return
+                canvas.delete("all")
+                canvas.create_image(0, 0, image=self.sky_img, anchor="nw")
+                sway = math.sin(time.time() * 1.5) * 20
+                canvas.create_image(-50 + sway, 500, image=self.grass_img, anchor="nw")
+                self.overlay.after(33, animate)
+            animate()
+        except Exception: 
+            pass
+
+        def on_close():
+            try:
+                audio.stop_wind_audio()
+                audio.unmute_system_audio()
+            except Exception: 
+                pass
+            self.overlay.destroy()
+            self.overlay = None
+
+        tk.Button(self.overlay, text="Return to Work", command=on_close, bg="#48BB78", fg="black", font=("Helvetica", 14, "bold")).place(relx=0.5, rely=0.5, anchor="center")
 
 def on_hotkey():
-    trigger_break()
+    EVENT_QUEUE.put("TRIGGER")
 
 def listen_ipc():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -127,21 +176,21 @@ def listen_ipc():
         server.listen(1)
         while True:
             server.accept()
-            trigger_break()
+            EVENT_QUEUE.put("TRIGGER")
     except Exception:
         pass
 
 if __name__ == "__main__":
-    # 1. WIZARD COMES FIRST 
     if not run_wizard():
         sys.exit(0)
 
-    # 2. HOTKEY TRIGGER (Ctrl + Alt + G)
     try:
         listener = keyboard.GlobalHotKeys({'<ctrl>+<alt>+g': on_hotkey})
         listener.start()
-    except Exception:
+    except Exception: 
         pass
 
-    # 3. BACKGROUND SERVER
-    listen_ipc()
+    threading.Thread(target=listen_ipc, daemon=True).start()
+
+    app = AppManager()
+    app.root.mainloop()
