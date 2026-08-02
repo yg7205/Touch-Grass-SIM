@@ -12,7 +12,7 @@ import tkinter as tk
 try:
     from PIL import Image, ImageTk, ImageOps
 except ImportError:
-    pass
+    print("Warning: Pillow (PIL) is not installed. Images will not load.")
 
 try:
     from pynput import keyboard
@@ -29,24 +29,30 @@ IPC_PORT = 47382
 EVENT_QUEUE = queue.Queue()
 
 # --- UNINSTALLER: ORPHAN FILE CLEANUP ---
-# When you uninstall the thing across all softwares it automatically removes that file
 if "--uninstall" in sys.argv:
     if os.path.exists(CONFIG_PATH):
-        os.remove(CONFIG_PATH)
+        try:
+            os.remove(CONFIG_PATH)
+            print("Config file automatically removed during uninstall.")
+        except Exception:
+            pass
     sys.exit(0)
 
 def get_asset_path(filename):
-    # Absolute path resolution pointing directly to the main directory
-    return os.path.abspath(os.path.join(os.path.dirname(__file__), filename))
+    # Aggressively forces Python to look in the same directory as this script
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    target_path = os.path.join(base_dir, filename)
+    if not os.path.exists(target_path):
+        # Fallback to current working directory just in case
+        target_path = os.path.join(os.getcwd(), filename)
+    return target_path
 
 def set_window_icon(window):
-    # 1. LINUX LOGO FIX
     try: 
         window.wm_class("touch-grass-sim", "Touch Grass SIM")
     except Exception: 
         pass
     
-    # 2. WINDOWS LOGO FIX
     if sys.platform == "win32":
         try:
             import ctypes
@@ -54,21 +60,22 @@ def set_window_icon(window):
         except Exception: 
             pass
             
-    # 3. FORCE APPLY ICON
     try:
         icon_path = get_asset_path("icon.png")
-        icon_img = ImageTk.PhotoImage(Image.open(icon_path))
-        window.iconphoto(True, icon_img)
-        window._icon_photo = icon_img
-        
-        # Windows fallback for older Tkinter versions
-        if sys.platform == "win32":
-            window.iconbitmap(icon_path.replace(".png", ".ico"))
+        if os.path.exists(icon_path):
+            icon_img = ImageTk.PhotoImage(Image.open(icon_path))
+            window.iconphoto(True, icon_img)
+            window._icon_photo = icon_img
+            
+            if sys.platform == "win32":
+                try:
+                    window.iconbitmap(icon_path.replace(".png", ".ico"))
+                except Exception:
+                    pass
     except Exception as e:
-        print(f"Icon error: {e}")
+        print(f"Failed to load icon.png: {e}")
 
 def run_wizard():
-    # If the config exists, we already did this. Skip it!
     if os.path.exists(CONFIG_PATH):
         return True
 
@@ -80,20 +87,20 @@ def run_wizard():
     
     set_window_icon(root)
 
-    # BANNER - Strictly uses anime.png from the main directory
     canvas = tk.Canvas(root, width=560, height=180, bg="#1D2D44", highlightthickness=0)
     canvas.pack(fill="x")
     
     try:
-        pil_banner = Image.open(get_asset_path("anime.png"))
+        anime_path = get_asset_path("anime.png")
+        pil_banner = Image.open(anime_path)
         pil_banner = ImageOps.fit(pil_banner, (560, 180), Image.Resampling.LANCZOS)
         banner_img = ImageTk.PhotoImage(pil_banner)
         canvas.create_image(0, 0, image=banner_img, anchor="nw")
         canvas.image = banner_img 
-    except Exception:
-        canvas.create_text(280, 90, text="TOUCH GRASS SIM", fill="#F4F1DE", font=("Helvetica", 22, "bold"))
+    except Exception as e:
+        print(f"Failed to load anime.png: {e}")
+        canvas.create_text(280, 90, text="TOUCH GRASS SIM (MISSING ANIME.PNG)", fill="#F4F1DE", font=("Helvetica", 16, "bold"))
     
-    # EULA TEXT BOX
     eula_frame = tk.Frame(root, bg="#2D3748")
     eula_frame.pack(fill="both", expand=True, padx=20, pady=15)
     
@@ -109,7 +116,6 @@ def run_wizard():
     eula_text.pack(side="left", fill="both", expand=True)
     text_scroll.config(command=eula_text.yview)
 
-    # CHECKBOX & BUTTONS
     bottom_frame = tk.Frame(root, bg="#2D3748")
     bottom_frame.pack(side="bottom", fill="x", padx=20, pady=20)
     
@@ -148,8 +154,12 @@ def run_wizard():
 class AppManager:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.withdraw() # Hide the background window
+        self.root.withdraw()
         self.overlay = None
+        
+        self.screen_width = self.root.winfo_screenwidth()
+        self.screen_height = self.root.winfo_screenheight()
+        
         self.check_queue()
 
     def check_queue(self):
@@ -180,19 +190,45 @@ class AppManager:
         canvas.pack(fill="both", expand=True)
 
         try:
-            self.sky_img = ImageTk.PhotoImage(Image.open(get_asset_path("sky.png")))
-            self.grass_img = ImageTk.PhotoImage(Image.open(get_asset_path("ghibli.png")))
+            # DYNAMICALLY SPLIT ghibli.png INTO SKY AND GRASS
+            img_path = get_asset_path("ghibli.png")
+            raw_img = Image.open(img_path)
+            
+            # Scale image to exactly fit the screen
+            scaled_img = ImageOps.fit(raw_img, (self.screen_width, self.screen_height), Image.Resampling.LANCZOS)
+            
+            # Define where the sky ends and grass begins (45% down the screen)
+            split_y = int(self.screen_height * 0.45)
+            
+            # Crop the top half for the static sky
+            sky_crop = scaled_img.crop((0, 0, self.screen_width, split_y))
+            self.sky_img = ImageTk.PhotoImage(sky_crop)
+            
+            # Crop the bottom half for the moving grass
+            # We add a little extra width buffer so the edges don't show when it sways
+            buffer_width = self.screen_width + 100
+            grass_scaled = ImageOps.fit(raw_img, (buffer_width, self.screen_height), Image.Resampling.LANCZOS)
+            grass_crop = grass_scaled.crop((0, split_y, buffer_width, self.screen_height))
+            self.grass_img = ImageTk.PhotoImage(grass_crop)
             
             def animate():
                 if not self.overlay or not self.overlay.winfo_exists(): return
                 canvas.delete("all")
+                
+                # Draw the static sky at the top left
                 canvas.create_image(0, 0, image=self.sky_img, anchor="nw")
+                
+                # Draw the grass below the sky, swaying horizontally
                 sway = math.sin(time.time() * 1.5) * 20
-                canvas.create_image(-50 + sway, 500, image=self.grass_img, anchor="nw")
+                canvas.create_image(-50 + sway, split_y, image=self.grass_img, anchor="nw")
+                
                 self.overlay.after(33, animate)
+            
             animate()
-        except Exception: 
-            pass
+            
+        except Exception as e:
+            print(f"Failed to load or slice ghibli.png: {e}")
+            canvas.create_text(self.screen_width/2, self.screen_height/2, text="TIME TO TOUCH GRASS (ghibli.png missing)", fill="white", font=("Helvetica", 24, "bold"))
 
         def on_close():
             try:
@@ -233,4 +269,8 @@ if __name__ == "__main__":
     threading.Thread(target=listen_ipc, daemon=True).start()
 
     app = AppManager()
+    
+    # AUTOMATIC LAUNCH: Forces the break screen to open immediately so you know it works.
+    EVENT_QUEUE.put("TRIGGER")
+    
     app.root.mainloop()
