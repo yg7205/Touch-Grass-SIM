@@ -64,9 +64,8 @@ def get_asset_path(filename):
     return None
 
 def set_window_icon(window):
-    """Sets the application icon for Windows, Linux, and macOS taskbars."""
+    """Sets application icon for Windows, Linux, and macOS taskbars."""
     try:
-        # LINUX FIX: Assign X11 WM_CLASS so GNOME/Wayland respects the icon
         window.wm_class("touch-grass-sim", "Touch Grass SIM")
     except Exception:
         pass
@@ -74,7 +73,6 @@ def set_window_icon(window):
     icon_path = get_asset_path("icon.png")
     if icon_path and PIL_AVAILABLE:
         try:
-            # WINDOWS FIX: Force Windows taskbar to drop the default Python gear
             if sys.platform == "win32":
                 import ctypes
                 ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("touchgrass.sim.app.1.0")
@@ -111,8 +109,10 @@ def run_first_time_wizard():
     root.title("Touch Grass SIM — Setup Wizard")
     root.geometry("540x620")
     root.resizable(False, False)
+    root.configure(bg="#1F2937")
     set_window_icon(root)
 
+    # Wizard Banner Image (anime.png)
     banner_path = get_asset_path("anime.png")
     if banner_path and PIL_AVAILABLE:
         try:
@@ -129,10 +129,10 @@ def run_first_time_wizard():
         canvas.pack(fill="x")
         canvas.create_text(270, 90, text="TOUCH GRASS SIM", fill="#F4F1DE", font=("Helvetica", 22, "bold"))
 
-    frame = ttk.Frame(root, padding=20)
+    frame = tk.Frame(root, bg="#1F2937", padx=20, pady=20)
     frame.pack(fill="both", expand=True)
 
-    ttk.Label(frame, text="Welcome to Touch Grass SIM!", font=("Helvetica", 14, "bold")).pack(anchor="w", pady=(0, 5))
+    tk.Label(frame, text="Welcome to Touch Grass SIM!", font=("Helvetica", 14, "bold"), fg="#F9FAFB", bg="#1F2937").pack(anchor="w", pady=(0, 5))
     
     desc_text = (
         "Touch Grass SIM enforces 5-minute mandatory digital wellness breaks every 4 hours.\n\n"
@@ -140,14 +140,14 @@ def run_first_time_wizard():
         "• Animated Ghibli grass physics\n"
         "• Locked 300-second mindfulness break timer\n"
         "• Global shortcut (Ctrl + Alt + G) for early breaks\n"
-        "• Environmental audio suppression\n"
+        "• Environmental audio suppression & ambient sound\n"
     )
-    ttk.Label(frame, text=desc_text, wraplength=480, justify="left").pack(anchor="w", pady=(0, 10))
+    tk.Label(frame, text=desc_text, font=("Helvetica", 10), fg="#D1D5DB", bg="#1F2937", justify="left", wraplength=480).pack(anchor="w", pady=(0, 10))
 
-    eula_frame = ttk.LabelFrame(frame, text="End User License Agreement", padding=10)
+    eula_frame = tk.LabelFrame(frame, text="End User License Agreement", font=("Helvetica", 9, "bold"), fg="#9CA3AF", bg="#111827", padx=10, pady=10)
     eula_frame.pack(fill="both", expand=True, pady=(0, 10))
 
-    eula_text = tk.Text(eula_frame, wrap="word", height=6, font=("Consolas", 8))
+    eula_text = tk.Text(eula_frame, wrap="word", height=5, font=("Consolas", 8), bg="#1F2937", fg="#E5E7EB", bd=0)
     eula_text.insert("1.0", "By using Touch Grass SIM, you agree to allow background hotkey listeners, system audio muting, and periodic break overlays designed to prevent digital fatigue. All data is processed entirely locally on your device.")
     eula_text.config(state="disabled")
     eula_text.pack(fill="both", expand=True)
@@ -159,16 +159,34 @@ def run_first_time_wizard():
         wizard_success[0] = True
         root.destroy()
 
-    chk = tk.Checkbutton(frame, text="I agree to touch grass.", variable=eula_var, command=lambda: accept_btn.config(state=tk.NORMAL if eula_var.get() else tk.DISABLED))
+    def toggle_buttons():
+        if eula_var.get():
+            accept_btn.config(state=tk.NORMAL, bg="#10B981", fg="#FFFFFF", activebackground="#059669", activeforeground="#FFFFFF")
+        else:
+            accept_btn.config(state=tk.DISABLED, bg="#374151", fg="#9CA3AF", activebackground="#374151", activeforeground="#9CA3AF")
+
+    chk = tk.Checkbutton(
+        frame, text="I agree to touch grass.", variable=eula_var, command=toggle_buttons,
+        font=("Helvetica", 10, "bold"), fg="#F9FAFB", bg="#1F2937", selectcolor="#111827", activebackground="#1F2937", activeforeground="#F9FAFB"
+    )
     chk.pack(anchor="w", pady=(0, 15))
 
-    btn_frame = tk.Frame(frame)
+    btn_frame = tk.Frame(frame, bg="#1F2937")
     btn_frame.pack(fill="x")
 
-    accept_btn = tk.Button(btn_frame, text="Accept & Continue", state=tk.DISABLED, command=on_finish, width=16)
+    # Clear, explicitly styled buttons to fix blank display bug
+    accept_btn = tk.Button(
+        btn_frame, text="Accept & Continue", state=tk.DISABLED, command=on_finish,
+        font=("Helvetica", 10, "bold"), bg="#374151", fg="#9CA3AF", disabledforeground="#9CA3AF",
+        bd=0, padx=15, pady=8, cursor="hand2"
+    )
     accept_btn.pack(side="right", padx=5)
 
-    cancel_btn = tk.Button(btn_frame, text="Decline", command=root.destroy, width=10)
+    cancel_btn = tk.Button(
+        btn_frame, text="Decline", command=root.destroy,
+        font=("Helvetica", 10, "bold"), bg="#EF4444", fg="#FFFFFF", activebackground="#DC2626", activeforeground="#FFFFFF",
+        bd=0, padx=15, pady=8, cursor="hand2"
+    )
     cancel_btn.pack(side="right", padx=5)
 
     root.mainloop()
@@ -205,7 +223,8 @@ class AppManager:
         tk.Label(self.ui_frame, textvariable=self.time_var, font=("Helvetica", 48, "bold"), fg="#FFFFFF", bg="#111827").pack(padx=30, pady=5)
         
         self.return_btn = tk.Button(
-            self.ui_frame, text="Return to Work (Locked)", state="disabled", font=("Helvetica", 12, "bold"), bg="#374151", fg="#9CA3AF", command=self.dismiss_overlay
+            self.ui_frame, text="Return to Work (Locked)", state="disabled", font=("Helvetica", 12, "bold"),
+            bg="#374151", fg="#9CA3AF", disabledforeground="#9CA3AF", command=self.dismiss_overlay
         )
         self.return_btn.pack(padx=30, pady=(10, 20))
 
@@ -214,18 +233,16 @@ class AppManager:
         self.show_overlay()
 
     def init_ghibli_background(self):
-        # Using the smooth single-image method so there is no blocky tearing
         img_path = get_asset_path("ghibli.png")
         if not img_path or not PIL_AVAILABLE: return
 
         try:
             raw_img = Image.open(img_path)
-            # Make the image slightly wider so it can pan back and forth smoothly
-            scaled_img = ImageOps.fit(raw_img, (self.width + 100, self.height), Image.Resampling.LANCZOS)
+            scaled_img = ImageOps.fit(raw_img, (self.width + 120, self.height), Image.Resampling.LANCZOS)
             
-            self.sky_height = int(self.height * 0.60)
-            self.sky_tk = ImageTk.PhotoImage(scaled_img.crop((50, 0, self.width + 50, self.sky_height)))
-            self.grass_tk = ImageTk.PhotoImage(scaled_img.crop((0, self.sky_height, self.width + 100, self.height)))
+            self.sky_height = int(self.height * 0.58)
+            self.sky_tk = ImageTk.PhotoImage(scaled_img.crop((60, 0, self.width + 60, self.sky_height)))
+            self.grass_tk = ImageTk.PhotoImage(scaled_img.crop((0, self.sky_height, self.width + 120, self.height)))
             
             self.ghibli_data = True
         except Exception as e:
@@ -246,16 +263,33 @@ class AppManager:
         self.root.attributes("-topmost", True)
         self.root.lift()
         
+        # Audio System: Mute external audio & loop wind.mp3
         if AUDIO_AVAILABLE:
-            wind_file = get_asset_path("wind.mp3")
-            audio.start_wind_audio(wind_file)
+            try:
+                if hasattr(audio, "mute_system_audio"):
+                    audio.mute_system_audio()
+                wind_file = get_asset_path("wind.mp3")
+                if wind_file and hasattr(audio, "start_wind_audio"):
+                    audio.start_wind_audio(wind_file)
+            except Exception as e:
+                log_msg(f"Audio start error: {e}")
             
         self.update_timer()
 
     def dismiss_overlay(self):
         self.is_active = False
         self.root.withdraw()
-        if AUDIO_AVAILABLE: audio.stop_wind_audio()
+
+        # Unmute external audio & stop wind.mp3
+        if AUDIO_AVAILABLE:
+            try:
+                if hasattr(audio, "stop_wind_audio"):
+                    audio.stop_wind_audio()
+                if hasattr(audio, "unmute_system_audio"):
+                    audio.unmute_system_audio()
+            except Exception as e:
+                log_msg(f"Audio stop error: {e}")
+
         self.root.after(14400000, self.show_overlay) 
 
     def update_timer(self):
@@ -275,12 +309,12 @@ class AppManager:
             t = time.time()
             
             if self.ghibli_data:
-                # Sky stays anchored
+                # Sky background stays anchored
                 self.canvas.create_image(0, 0, image=self.sky_tk, anchor="nw")
                 
-                # Grass sways smoothly on a sine wave
-                sway = math.sin(t * 1.5) * 20
-                self.canvas.create_image(-50 + sway, self.sky_height, image=self.grass_tk, anchor="nw")
+                # Organic grass sway calculation using combined sine waves
+                sway = math.sin(t * 1.2) * 25 + math.cos(t * 0.6) * 10
+                self.canvas.create_image(-60 + sway, self.sky_height, image=self.grass_tk, anchor="nw")
 
         self.root.after(33, self.animate)
 
@@ -291,8 +325,6 @@ class AppManager:
                 if msg == "TRIGGER_BREAK":
                     self.show_overlay()
                 elif msg == "SHUTDOWN":
-                    # AUTO-ASSASSIN: Instantly terminates this process
-                    log_msg("Received shutdown order. Self-destructing.")
                     os._exit(0)
         except queue.Empty:
             pass
@@ -302,14 +334,25 @@ class AppManager:
         self.root.mainloop()
 
 def setup_global_hotkey():
-    if not PYNPUT_AVAILABLE: return
+    if not PYNPUT_AVAILABLE:
+        log_msg("pynput not installed. Global hotkeys disabled.")
+        return
+
     def on_activate():
+        log_msg("Global hotkey triggered break.")
         EVENT_QUEUE.put("TRIGGER_BREAK")
+
     try:
-        hotkey = keyboard.GlobalHotKeys({'<ctrl>+<alt>+g': on_activate})
-        threading.Thread(target=hotkey.start, daemon=True).start()
-    except Exception:
-        pass
+        # Registers Ctrl + Alt + G across variations
+        hotkey = keyboard.GlobalHotKeys({
+            '<ctrl>+<alt>+g': on_activate,
+            '<ctrl>+<alt>+G': on_activate
+        })
+        t = threading.Thread(target=hotkey.start, daemon=True)
+        t.start()
+        log_msg("Global hotkey (Ctrl + Alt + G) successfully active.")
+    except Exception as e:
+        log_msg(f"Hotkey registration issue: {e}")
 
 def listen_for_ipc_triggers():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -329,32 +372,30 @@ def listen_for_ipc_triggers():
         pass
 
 def kill_ghost_process():
-    """Connects to the IPC port and commands any old background instance to self-destruct instantly."""
     try:
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client.settimeout(0.5)
         client.connect(("127.0.0.1", IPC_PORT))
         client.sendall(b"SHUTDOWN\n")
         client.close()
-        log_msg("Ghost process detected. Kill signal sent.")
-        time.sleep(1) # Give the OS exactly 1 second to release the port for the new instance
+        time.sleep(0.5)
     except Exception:
-        pass # No ghost process found, all clear
+        pass
 
 if __name__ == "__main__":
     ensure_display_env()
 
-    # 1. THE AUTO-ASSASSIN: Clear out any stuck ghost processes first
+    # Clear stale background instances
     kill_ghost_process()
 
-    # 2. RUN THE WIZARD: It will pop up properly now
+    # Launch First-Time Wizard
     if not run_first_time_wizard():
         sys.exit(0)
 
-    # 3. START BACKGROUND SYSTEMS
+    # Initialize Hotkeys and Socket IPC
     threading.Thread(target=listen_for_ipc_triggers, daemon=True).start()
     setup_global_hotkey()
 
-    # 4. START THE APP
+    # Run Application
     app = AppManager(duration_sec=300)
     app.run()
